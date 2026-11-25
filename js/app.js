@@ -19,8 +19,15 @@
     },
   };
 
-  const settings = Object.assign({ order: 'seq', rate: 1, autoSpeak: true, unitId: UNITS[0] && UNITS[0].id },
+  const settings = Object.assign(
+    { order: 'random', count: 10, showHint: true, rate: 1, autoSpeak: true, unitIds: UNITS[0] ? [UNITS[0].id] : [] },
     store.get('se.settings', {}));
+  // 古い設定（1ユニットだけ選ぶ形式）からの移行
+  if (!Array.isArray(settings.unitIds) || settings.unitId) {
+    settings.unitIds = UNITS[0] ? [UNITS[0].id] : [];
+    delete settings.unitId;
+  }
+  settings.unitIds = settings.unitIds.filter((id) => UNITS.some((u) => u.id === id));
   const saveSettings = () => store.set('se.settings', settings);
 
   // 「これも正解」で登録した別解 { 問題ID: [英文, ...] }
@@ -61,31 +68,75 @@
   }
 
   // ---- ホーム ----
+  function categories() {
+    const map = new Map();
+    for (const u of UNITS) {
+      const c = u.category || 'その他';
+      if (!map.has(c)) map.set(c, []);
+      map.get(c).push(u);
+    }
+    return map;
+  }
+
+  function selectedUnits() {
+    return [...document.querySelectorAll('input[name=unit]:checked')]
+      .map((el) => UNITS.find((u) => u.id === el.value)).filter(Boolean);
+  }
+
+  function updateStart() {
+    const units = selectedUnits();
+    const total = units.reduce((s, u) => s + u.questions.length, 0);
+    const per = Number($('count').value) || total;
+    $('start').disabled = !total;
+    $('start').textContent = total ? '始める（' + Math.min(per, total) + '問 / 選択中 ' + total + '問）' : 'ユニットを選んでください';
+  }
+
   function renderHome() {
     const list = $('unit-list');
     list.textContent = '';
-    for (const u of UNITS) {
-      const label = document.createElement('label');
-      label.className = 'unit';
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'unit';
-      radio.value = u.id;
-      radio.checked = u.id === settings.unitId;
-      const body = document.createElement('span');
-      const stage = document.createElement('span');
-      stage.className = 'stage';
-      stage.textContent = 'ステージ' + u.stage;
-      const title = document.createElement('div');
-      title.textContent = u.title;
-      body.append(stage, title);
-      const count = document.createElement('span');
-      count.className = 'count';
-      count.textContent = u.questions.length + '問';
-      label.append(radio, body, count);
-      list.append(label);
+    for (const [cat, units] of categories()) {
+      const group = document.createElement('div');
+      group.className = 'cat';
+      const head = document.createElement('div');
+      head.className = 'cat-head';
+      const name = document.createElement('h3');
+      name.textContent = cat;
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'link';
+      all.textContent = 'まとめて選ぶ';
+      all.addEventListener('click', () => {
+        const boxes = [...group.querySelectorAll('input[name=unit]')];
+        const on = !boxes.every((b) => b.checked);
+        boxes.forEach((b) => { b.checked = on; });
+        onUnitChange();
+      });
+      head.append(name, all);
+      group.append(head);
+      for (const u of units) {
+        const label = document.createElement('label');
+        label.className = 'unit';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.name = 'unit';
+        box.value = u.id;
+        box.checked = settings.unitIds.includes(u.id);
+        box.addEventListener('change', onUnitChange);
+        const title = document.createElement('span');
+        title.className = 'unit-title';
+        title.textContent = u.title;
+        const count = document.createElement('span');
+        count.className = 'count';
+        count.textContent = u.questions.length + '問';
+        label.append(box, title, count);
+        group.append(label);
+      }
+      list.append(group);
     }
     for (const r of document.querySelectorAll('input[name=order]')) r.checked = r.value === settings.order;
+    $('count').value = String(settings.count);
+    $('show-hint').checked = settings.showHint;
+    updateStart();
     $('auto-speak').checked = settings.autoSpeak;
     $('rate').value = settings.rate;
     $('rate-out').textContent = Number(settings.rate).toFixed(1);
@@ -104,14 +155,34 @@
   });
   $('speak-test').addEventListener('click', () => speak('Could you please check the attached document?'));
 
-  $('start').addEventListener('click', () => {
-    const checked = document.querySelector('input[name=unit]:checked');
-    const unit = UNITS.find((u) => checked && u.id === checked.value) || UNITS[0];
-    settings.unitId = unit.id;
-    settings.order = document.querySelector('input[name=order]:checked').value;
+  function onUnitChange() {
+    settings.unitIds = selectedUnits().map((u) => u.id);
     saveSettings();
-    const qs = unit.questions.slice();
+    updateStart();
+  }
+  $('count').addEventListener('change', () => {
+    settings.count = Number($('count').value);
+    saveSettings();
+    updateStart();
+  });
+  $('show-hint').addEventListener('change', (e) => {
+    settings.showHint = e.target.checked;
+    saveSettings();
+  });
+  for (const r of document.querySelectorAll('input[name=order]')) {
+    r.addEventListener('change', () => {
+      settings.order = document.querySelector('input[name=order]:checked').value;
+      saveSettings();
+    });
+  }
+
+  $('start').addEventListener('click', () => {
+    const units = selectedUnits();
+    let qs = [];
+    for (const u of units) qs = qs.concat(u.questions.map((q) => Object.assign({ category: u.category }, q)));
+    if (!qs.length) return;
     if (settings.order === 'random') shuffle(qs);
+    if (settings.count > 0) qs = qs.slice(0, settings.count);
     startSession(qs);
   });
 
@@ -137,7 +208,10 @@
     const total = session.questions.length;
     $('progress').textContent = (session.index + 1) + ' / ' + total;
     $('bar-fill').style.width = (session.index / total * 100) + '%';
+    $('quiz-unit').textContent = [q.category, q.unit].filter(Boolean).join(' ｜ ');
     $('ja').textContent = q.ja;
+    $('hint').hidden = !(settings.showHint && q.hint);
+    $('hint').textContent = q.hint ? 'ヒント: ' + q.hint : '';
     const input = $('answer');
     input.value = '';
     input.readOnly = false;
@@ -197,6 +271,15 @@
     const others = answersOf(q).filter((a) => a !== r.answer);
     $('others').hidden = !others.length;
     $('others').textContent = others.length ? 'ほかの正解: ' + others.join(' / ') : '';
+    const tags = $('tags');
+    tags.textContent = '';
+    for (const t of q.grammarTags || []) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = t;
+      tags.append(chip);
+    }
+    tags.hidden = !(q.grammarTags && q.grammarTags.length);
     $('note').hidden = !q.note;
     $('note').textContent = q.note || '';
     $('accept').hidden = r.result === 'correct' || !rec.input;

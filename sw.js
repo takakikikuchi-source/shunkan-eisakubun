@@ -3,13 +3,16 @@
  * 保存済みのファイルをすぐ返し、裏でネットから最新版を取り直す。
  * 更新は「次に開いたとき」に反映される。
  */
-const CACHE = 'shunkan-eisakubun-v1';
+const CACHE = 'shunkan-eisakubun-v2';
 const FILES = [
   './',
   './index.html',
   './css/style.css',
   './js/judge.js',
   './js/app.js',
+  './data/biz-mail.js',
+  './data/biz-meeting.js',
+  './data/biz-negotiation.js',
   './data/stage1-be.js',
   './manifest.webmanifest',
   './icons/icon-192.png',

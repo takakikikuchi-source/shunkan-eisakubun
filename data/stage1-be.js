@@ -2,6 +2,7 @@
 window.SE_UNITS = window.SE_UNITS || [];
 window.SE_UNITS.push({
   id: 's1-be',
+  category: '基礎（中学文法）',
   stage: 1,
   title: 'be動詞（現在・過去）',
   questions: [

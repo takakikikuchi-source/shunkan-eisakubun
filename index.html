@@ -17,13 +17,21 @@
   <main>
     <!-- ユニット選択 -->
     <section id="screen-home" class="screen">
-      <h2>ユニットを選ぶ</h2>
+      <h2>ユニットを選ぶ <span class="muted small">（複数選ぶと混ぜて出題）</span></h2>
       <div id="unit-list" class="unit-list"></div>
 
       <fieldset class="opts">
-        <legend>出題順</legend>
-        <label><input type="radio" name="order" value="seq" checked> 順番通り</label>
-        <label><input type="radio" name="order" value="random"> ランダム</label>
+        <legend>出題</legend>
+        <label><input type="radio" name="order" value="random" checked> ランダム</label>
+        <label><input type="radio" name="order" value="seq"> 順番通り</label>
+        <label class="count-label">1回の問題数
+          <select id="count">
+            <option value="10">10問</option>
+            <option value="20">20問</option>
+            <option value="0">すべて</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="show-hint" checked> ヒント（使う表現）を表示</label>
       </fieldset>
 
       <fieldset class="opts">
@@ -45,7 +53,9 @@
       </div>
       <div class="bar"><div id="bar-fill"></div></div>
 
+      <p id="quiz-unit" class="quiz-unit"></p>
       <p id="ja" class="ja"></p>
+      <p id="hint" class="hint" hidden></p>
 
       <form id="answer-form" autocomplete="off">
         <input id="answer" type="text" inputmode="text" enterkeyhint="done"
@@ -68,6 +78,7 @@
           <p id="correct" class="en"></p>
         </div>
         <p id="others" class="others" hidden></p>
+        <div id="tags" class="tags" hidden></div>
         <p id="note" class="note" hidden></p>
         <div class="row">
           <button type="button" id="speak" class="secondary">もう一度聞く</button>
@@ -95,6 +106,9 @@
   </main>
 
   <script src="js/judge.js"></script>
+  <script src="data/biz-mail.js"></script>
+  <script src="data/biz-meeting.js"></script>
+  <script src="data/biz-negotiation.js"></script>
   <script src="data/stage1-be.js"></script>
   <script src="js/app.js"></script>
 </body>

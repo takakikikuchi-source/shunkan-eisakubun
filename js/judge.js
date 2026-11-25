@@ -64,6 +64,18 @@
     "they'd": ['they would', 'they had'],
   };
 
+  // 数を表す単語 → 数字（five と 5 を同じとみなす）
+  const NUMBERS = {
+    zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9',
+    ten: '10', eleven: '11', twelve: '12', thirteen: '13', fourteen: '14', fifteen: '15', sixteen: '16',
+    seventeen: '17', eighteen: '18', nineteen: '19', twenty: '20', thirty: '30', forty: '40', fifty: '50',
+    sixty: '60', seventy: '70', eighty: '80', ninety: '90',
+  };
+  // 表記ゆれの統一
+  const SPELLING = { ok: 'okay' };
+  // 正誤判定では無視する語（あってもなくても正解）
+  const OPTIONAL = new Set(['please']);
+
   const MAX_VARIANTS = 64;
 
   function normalizeQuotes(text) {
@@ -80,15 +92,18 @@
   function slotsOf(rawToken) {
     const cleaned = normalizeQuotes(rawToken)
       .toLowerCase()
+      .replace(/%/g, ' percent')
+      .replace(/\be-mail/g, 'email')
       .replace(/-/g, ' ')
-      .replace(/[^a-z0-9' ]/g, '');
+      .replace(/[^a-z0-9' ]/g, '')
+      .replace(/^(\d+)(am|pm)$/, '$1 $2');
     const slots = [];
     for (let piece of cleaned.split(' ')) {
       piece = piece.replace(/^'+|'+$/g, '');
       if (!piece) continue;
       const exp = CONTRACTIONS[piece];
       if (exp) slots.push(exp.map((e) => e.split(' ')));
-      else slots.push([[piece]]);
+      else slots.push([[NUMBERS[piece] || SPELLING[piece] || piece]]);
     }
     return slots;
   }
@@ -122,7 +137,7 @@
         }
       }
     }
-    return new Set(variants.map((v) => mergeCannot(v).join(' ')));
+    return new Set(variants.map((v) => mergeCannot(v).filter((w) => !OPTIONAL.has(w)).join(' ')));
   }
 
   // 差分表示用：代表の展開形を、元の単語の位置つきで並べる

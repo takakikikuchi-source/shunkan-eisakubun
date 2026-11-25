@@ -64,14 +64,63 @@ test('差分は一番近い別解に対して取る', () => {
   assert.equal(r.result, 'close');
 });
 
-test('問題データの正解・別解は自分自身と一致する', () => {
-  global.window = {};
-  require('../data/stage1-be.js');
-  for (const unit of global.window.SE_UNITS) {
+test('表記ゆれ：%・数字・時刻・OK・e-mail', () => {
+  assert.equal(judge('a 10% discount', ['a 10 percent discount']).result, 'correct');
+  assert.equal(judge('take 5 minutes', ['take five minutes']).result, 'correct');
+  assert.equal(judge('a thirty-minute call', ['a 30-minute call']).result, 'correct');
+  assert.equal(judge('starts at 3pm', ['starts at 3 p.m.']).result, 'correct');
+  assert.equal(judge('starts at 3 PM', ['starts at 3 p.m.']).result, 'correct');
+  assert.equal(judge('is it OK if', ['is it okay if']).result, 'correct');
+  assert.equal(judge('the e-mail I sent', ['the email I sent']).result, 'correct');
+  assert.equal(judge('about 1000 people', ['about 1,000 people']).result, 'correct');
+});
+
+test('please はあってもなくても正解', () => {
+  assert.equal(judge('Could you send it?', ['Could you please send it?']).result, 'correct');
+  assert.equal(judge('Could you please send it?', ['Could you send it?']).result, 'correct');
+});
+
+test('長い文で数語違いは惜しい', () => {
+  const ans = 'I would appreciate it if you could review the attached contract and get back to me by this Friday.';
+  assert.equal(judge('I would appreciate if you could review the attached contract and get back to me by this Friday', [ans]).result, 'close');
+  assert.equal(judge('I would appreciate it if you can check the attached contract and reply to me by Friday', [ans]).result, 'wrong');
+});
+
+// ---- 問題データの検査 ----
+const fs = require('node:fs');
+const path = require('node:path');
+global.window = {};
+const dataDir = path.join(__dirname, '..', 'data');
+for (const f of fs.readdirSync(dataDir).filter((f) => f.endsWith('.js')).sort()) require(path.join(dataDir, f));
+const UNITS = global.window.SE_UNITS;
+
+test('問題データ：必須項目がそろっていて ID が重複しない', () => {
+  const ids = new Set();
+  for (const unit of UNITS) {
+    assert.ok(unit.id && unit.title && unit.category, `unit ${unit.id}`);
+    assert.ok(unit.questions.length > 0, `unit ${unit.id} has questions`);
+    for (const q of unit.questions) {
+      assert.ok(q.id && q.ja && q.en.length, `question ${q.id}`);
+      assert.ok(!ids.has(q.id), `duplicate id ${q.id}`);
+      ids.add(q.id);
+    }
+  }
+});
+
+test('問題データ：正解・別解は自分自身と一致する', () => {
+  for (const unit of UNITS) {
     for (const q of unit.questions) {
       for (const ans of [...q.en, ...(q.alternatives || [])]) {
         assert.equal(judge(ans, q.en.concat(q.alternatives || [])).result, 'correct', `${q.id}: ${ans}`);
       }
     }
   }
+});
+
+test('問題データ：ビジネス3場面が各80問', () => {
+  const count = {};
+  for (const u of UNITS) count[u.category] = (count[u.category] || 0) + u.questions.length;
+  assert.equal(count['メール・チャット'], 80);
+  assert.equal(count['会議'], 80);
+  assert.equal(count['交渉・提案・プレゼン'], 80);
 });
