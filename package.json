@@ -1,0 +1,8 @@
+{
+  "name": "shunkan-eisakubun",
+  "private": true,
+  "description": "瞬間英作文ツール",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

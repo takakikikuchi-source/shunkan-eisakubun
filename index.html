@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>瞬間英作文</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>瞬間英作文</h1>
+  </header>
+
+  <main>
+    <!-- ユニット選択 -->
+    <section id="screen-home" class="screen">
+      <h2>ユニットを選ぶ</h2>
+      <div id="unit-list" class="unit-list"></div>
+
+      <fieldset class="opts">
+        <legend>出題順</legend>
+        <label><input type="radio" name="order" value="seq" checked> 順番通り</label>
+        <label><input type="radio" name="order" value="random"> ランダム</label>
+      </fieldset>
+
+      <fieldset class="opts">
+        <legend>読み上げ</legend>
+        <label><input type="checkbox" id="auto-speak" checked> 判定したら自動で読み上げる</label>
+        <label class="rate">速さ <input type="range" id="rate" min="0.6" max="1.4" step="0.1" value="1"> <output id="rate-out">1.0</output></label>
+        <button type="button" id="speak-test" class="secondary small">試しに聞く</button>
+        <p id="tts-warning" class="warn" hidden>このブラウザでは英語の読み上げが使えません。</p>
+      </fieldset>
+
+      <button type="button" id="start" class="primary wide">始める</button>
+    </section>
+
+    <!-- 出題 -->
+    <section id="screen-quiz" class="screen" hidden>
+      <div class="quiz-head">
+        <span id="progress" class="muted"></span>
+        <button type="button" id="quit" class="link">やめる</button>
+      </div>
+      <div class="bar"><div id="bar-fill"></div></div>
+
+      <p id="ja" class="ja"></p>
+
+      <form id="answer-form" autocomplete="off">
+        <input id="answer" type="text" inputmode="text" enterkeyhint="done"
+               autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="英語で入力して Enter">
+        <div class="row">
+          <button type="submit" class="primary">判定</button>
+          <button type="button" id="giveup" class="secondary">わからない</button>
+        </div>
+      </form>
+
+      <div id="feedback" class="feedback" hidden>
+        <p id="verdict" class="verdict"></p>
+        <div class="cmp">
+          <span class="lbl">あなた</span>
+          <p id="your" class="en"></p>
+        </div>
+        <div class="cmp">
+          <span class="lbl">正解</span>
+          <p id="correct" class="en"></p>
+        </div>
+        <p id="others" class="others" hidden></p>
+        <p id="note" class="note" hidden></p>
+        <div class="row">
+          <button type="button" id="speak" class="secondary">もう一度聞く</button>
+          <button type="button" id="accept" class="secondary">これも正解</button>
+          <button type="button" id="next" class="primary">次へ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 結果 -->
+    <section id="screen-result" class="screen" hidden>
+      <h2>結果</h2>
+      <div class="stats">
+        <div class="stat"><span class="num" id="r-rate"></span><span class="cap">正答率</span></div>
+        <div class="stat"><span class="num" id="r-count"></span><span class="cap">正解数</span></div>
+        <div class="stat"><span class="num" id="r-time"></span><span class="cap">平均回答時間</span></div>
+      </div>
+      <h3 id="r-miss-title">間違えた問題</h3>
+      <ul id="r-miss" class="miss-list"></ul>
+      <div class="row">
+        <button type="button" id="retry-miss" class="primary">間違えた問題だけもう一度</button>
+        <button type="button" id="back-home" class="secondary">ユニット選択に戻る</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/judge.js"></script>
+  <script src="data/stage1-be.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

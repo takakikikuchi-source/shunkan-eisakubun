@@ -1,0 +1,29 @@
+/* ステージ1：be動詞（現在・過去） */
+window.SE_UNITS = window.SE_UNITS || [];
+window.SE_UNITS.push({
+  id: 's1-be',
+  stage: 1,
+  title: 'be動詞（現在・過去）',
+  questions: [
+    { id: 's1-be-001', ja: '私は学生です。', en: ['I am a student.'], alternatives: [], note: '' },
+    { id: 's1-be-002', ja: '彼は医者です。', en: ['He is a doctor.'], alternatives: [], note: '' },
+    { id: 's1-be-003', ja: '私たちは友達です。', en: ['We are friends.'], alternatives: [], note: '主語が複数なので friend も複数形の friends。' },
+    { id: 's1-be-004', ja: 'これは私のかばんです。', en: ['This is my bag.'], alternatives: [], note: '' },
+    { id: 's1-be-005', ja: 'あれらは彼女の本です。', en: ['Those are her books.'], alternatives: [], note: 'that の複数形は those。be動詞も are になる。' },
+    { id: 's1-be-006', ja: '私は今日忙しいです。', en: ['I am busy today.'], alternatives: ['Today I am busy.'], note: '' },
+    { id: 's1-be-007', ja: '彼女は会議室にいます。', en: ['She is in the meeting room.'], alternatives: ['She is in the conference room.'], note: '「〜にいる」も be動詞で表せる。' },
+    { id: 's1-be-008', ja: '私は新入社員ではありません。', en: ['I am not a new employee.'], alternatives: ['I am not a new hire.'], note: '否定は be動詞の後ろに not。' },
+    { id: 's1-be-009', ja: '彼らは東京出身です。', en: ['They are from Tokyo.'], alternatives: [], note: '出身は be from 〜。' },
+    { id: 's1-be-010', ja: 'あなたはエンジニアですか？', en: ['Are you an engineer?'], alternatives: [], note: 'engineer は母音で始まるので an。' },
+    { id: 's1-be-011', ja: 'その会議は長くありません。', en: ['The meeting is not long.'], alternatives: [], note: '' },
+    { id: 's1-be-012', ja: '会議室はどこですか？', en: ['Where is the meeting room?'], alternatives: ['Where is the conference room?'], note: '' },
+    { id: 's1-be-013', ja: '私は昨日、家にいました。', en: ['I was at home yesterday.'], alternatives: ['I was home yesterday.', 'Yesterday I was at home.'], note: '過去形：am / is → was。' },
+    { id: 's1-be-014', ja: '彼らは先週とても忙しかったです。', en: ['They were very busy last week.'], alternatives: ['Last week they were very busy.'], note: '過去形：are → were。' },
+    { id: 's1-be-015', ja: 'この部屋は暑すぎます。', en: ['This room is too hot.'], alternatives: [], note: 'too は「〜すぎる」。' },
+    { id: 's1-be-016', ja: '今日は月曜日です。', en: ['Today is Monday.'], alternatives: ['It is Monday today.'], note: '曜日は大文字で始める。' },
+    { id: 's1-be-017', ja: '私の上司は今オフィスにいません。', en: ['My boss is not in the office now.'], alternatives: ['My boss is not in the office right now.', 'My manager is not in the office now.', 'My manager is not in the office right now.'], note: '' },
+    { id: 's1-be-018', ja: 'その資料は机の上にあります。', en: ['The documents are on the desk.'], alternatives: ['The document is on the desk.', 'The materials are on the desk.'], note: '資料が1つなら document is、複数なら documents are。' },
+    { id: 's1-be-019', ja: 'あなたの席はこちらです。', en: ['This is your seat.'], alternatives: ['Your seat is here.', 'Here is your seat.'], note: '' },
+    { id: 's1-be-020', ja: '彼女は昨日、会議に遅れました。', en: ['She was late for the meeting yesterday.'], alternatives: ['Yesterday she was late for the meeting.'], note: '「〜に遅れる」は be late for 〜。' },
+  ].map((q) => Object.assign({ stage: 1, unit: 'be動詞（現在・過去）', grammarTags: ['be動詞'], source: 'builtin' }, q)),
+});
