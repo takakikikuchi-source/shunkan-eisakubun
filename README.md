@@ -2,6 +2,15 @@
 
 日本語の文を見て、英文をタイピングで答える練習ツール。要件は [docs/requirements.md](docs/requirements.md)。
 
+## 公開ページ（GitHub Pages）
+
+https://takakikikuchi-source.github.io/shunkan-eisakubun/
+
+- `main` ブランチに push すると1〜2分で反映される
+- スマホ（Android Chrome）ではメニューの「ホーム画面に追加」でアプリとして使える。一度開けばオフラインでも動く
+- 更新は「次に開いたとき」に反映される（1回目は前の版が表示される）
+- ファイルを追加したら `sw.js` の `FILES` にも追加し、`CACHE` の番号を上げる
+
 ## 使い方（PC）
 
 `index.html` をダブルクリックして Chrome / Edge で開く。

@@ -278,4 +278,11 @@
   $('back-home').addEventListener('click', renderHome);
 
   renderHome();
+
+  // オフライン対応（ネット上で開いたときだけ）
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    try {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    } catch (e) { /* 使えない環境では何もしない */ }
+  }
 })();

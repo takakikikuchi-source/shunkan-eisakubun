@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#2f6fde"/>
+  <text x="256" y="262" text-anchor="middle" dominant-baseline="central"
+        font-family="'Yu Gothic UI','Yu Gothic','Noto Sans JP',sans-serif" font-weight="700"
+        font-size="230" fill="#ffffff">英</text>
+  <rect x="150" y="372" width="212" height="18" rx="9" fill="#ffffff" opacity="0.85"/>
+</svg>
