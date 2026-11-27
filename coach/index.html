@@ -46,7 +46,8 @@
         <div class="block" id="step1">
           <div class="block-head">
             <span class="num">1</span><h2>書きたい文章</h2>
-            <button type="button" id="edit-src" class="link head-action" hidden>編集</button>
+            <button type="button" id="btn-example" class="chip-btn head-action" title="広告配信の仕事でよく使う例文から、ランダムに1つ入れます">例文を入れる</button>
+            <button type="button" id="edit-src" class="link" hidden>編集</button>
           </div>
           <div id="src-summary" class="src-summary" hidden>
             <p id="src-summary-text" class="clamp"></p>
@@ -90,12 +91,22 @@
           <div class="seg" id="level-seg" role="group" aria-label="言い換えの段階"></div>
           <p id="level-desc" class="muted small level-desc"></p>
           <textarea id="easy" rows="2" class="grow easy-text" aria-label="英語にしやすい日本語（直してもかまいません）"></textarea>
-          <div class="toggles">
-            <button type="button" class="chip-btn" id="toggle-points" aria-expanded="false">言い換えたところ<span id="points-count"></span></button>
-            <button type="button" class="chip-btn" id="toggle-phrases" aria-expanded="false">ヒント：使えそうな表現</button>
+          <div id="skeleton" class="skeleton" hidden>
+            <div class="skeleton-head">
+              <span class="skeleton-title">骨組みヒント（英語の順番）</span>
+              <button type="button" id="sk-next" class="chip-btn">次を見る</button>
+              <button type="button" id="sk-all" class="chip-btn">全部見る</button>
+            </div>
+            <div id="skeleton-body" class="skeleton-body"></div>
           </div>
-          <ul id="easy-points" class="mini-list" hidden></ul>
+          <div class="toggles">
+            <button type="button" class="chip-btn" id="toggle-words" aria-expanded="false">単語ヒント<span id="words-count"></span></button>
+            <button type="button" class="chip-btn" id="toggle-phrases" aria-expanded="false">使えそうな表現</button>
+            <button type="button" class="chip-btn" id="toggle-points" aria-expanded="false">言い換えたところ<span id="points-count"></span></button>
+          </div>
+          <dl id="words" class="words" hidden></dl>
           <ul id="phrases" class="mini-list mono" hidden></ul>
+          <ul id="easy-points" class="mini-list" hidden></ul>
         </div>
 
         <!-- 3 -->
@@ -223,6 +234,7 @@
   </main>
 
   <script src="../js/judge.js"></script>
+  <script src="examples.js"></script>
   <script src="coach.js"></script>
 </body>
 </html>

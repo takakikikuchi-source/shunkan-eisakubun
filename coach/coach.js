@@ -60,6 +60,7 @@
   }
   bindToggle($('toggle-points'), $('easy-points'));
   bindToggle($('toggle-phrases'), $('phrases'));
+  bindToggle($('toggle-words'), $('words'));
   bindToggle($('toggle-rv-src'), $('rv-src'));
 
   // ---- タブ ----
@@ -292,7 +293,11 @@
       '- 「よろしくお願いします」「お世話になっております」「検討します」「対応します」など英語に直訳しにくい表現は、英語で言える具体的な意味に置き換える',
       '- 敬語は簡潔にし、丁寧さは「丁寧にお願いする」のように意図として残す',
       '- 時制・数・期限・条件をはっきりさせる',
-      '- easyJa には英単語や英文を入れない（英語は keyPhrases にだけ書く）',
+      '- easyJa には英単語や英文を入れない（英語は keyPhrases・wordHints・skeleton にだけ書く）',
+      '',
+      'ヒントの作り方:',
+      '- wordHints（3段階それぞれ）: その段階の easyJa の中で、英語にするとき単語が思い浮かびにくそうな言葉を3〜6個選び、英語の候補を1〜3個ずつ挙げる。中学英語で言える簡単な候補を先に書く（例: 延期する → move, push back, postpone）',
+      '- skeleton（simple だけ）: simple の easyJa を1文ずつ、英語の語順で「部品」に分けた骨組み。部品の role は「誰が」「する」「何を」「誰に」「どこで」「いつ」「なぜ」「どのように」から選び、en は短い英語のかたまりにする（例: 誰が We → する decided → 何を to start a trial → いつ next month）。部品をつなげるとそのまま正しい英文になるようにし、簡単な単語を使う',
       '',
       contextLines(scene, audience),
       '',
@@ -302,7 +307,7 @@
       '"""',
       '',
       '次の形の JSON だけを返してください（points はどこをどう言い換えたかを短く2〜4個、keyPhrases はその段階で使えそうな英語の型を2〜4個）:',
-      '{"levels": {"simple": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}, "standard": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}, "better": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}}, "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
+      '{"levels": {"simple": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "延期する", "en": ["move", "push back"]}], "skeleton": [{"ja": "この文の日本語", "parts": [{"role": "誰が", "en": "We"}, {"role": "する", "en": "decided"}]}]}, "standard": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}, "better": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}}, "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
     ].join('\n');
   }
 
@@ -344,6 +349,12 @@
       easyJa: str(v.easyJa).trim(),
       points: arr(v.points).map(str).filter(Boolean),
       keyPhrases: arr(v.keyPhrases).map(str).filter(Boolean),
+      wordHints: arr(v.wordHints)
+        .map((w) => ({ ja: str(w && w.ja), en: (Array.isArray(w && w.en) ? w.en : [w && w.en]).map(str).filter(Boolean) }))
+        .filter((w) => w.ja && w.en.length),
+      skeleton: arr(v.skeleton)
+        .map((s) => ({ ja: str(s && s.ja), parts: arr(s && s.parts).map((p) => ({ role: str(p && p.role), en: str(p && p.en) })).filter((p) => p.en) }))
+        .filter((s) => s.parts.length),
     };
   }
 
@@ -594,6 +605,61 @@
     ph.textContent = '';
     for (const p of e.keyPhrases) ph.append(el('li', '', p));
     $('toggle-phrases').hidden = !e.keyPhrases.length;
+
+    // 単語ヒント
+    const words = arr(e.wordHints);
+    const dl = $('words');
+    dl.textContent = '';
+    for (const w of words) dl.append(el('dt', '', w.ja), el('dd', '', w.en.join(' / ')));
+    $('words-count').textContent = words.length ? '（' + words.length + '）' : '';
+    $('toggle-words').hidden = !words.length;
+    if (!words.length) closeToggle($('toggle-words'), dl);
+
+    // 骨組みヒント（かんたんのときだけ）
+    const key = id + '|' + draft.src;
+    if (key !== skKey) { skKey = key; skOpen.clear(); }
+    const sk = id === 'simple' ? arr(e.skeleton) : [];
+    $('skeleton').hidden = !sk.length;
+    renderSkeleton(sk);
+  }
+
+  // 骨組みヒント：部品を押すと英語が見える。「次を見る」で英語の順に1つずつ、「全部見る」でまとめて
+  const skOpen = new Set();
+  let skKey = '';
+  function renderSkeleton(sk) {
+    const body = $('skeleton-body');
+    body.textContent = '';
+    sk.forEach((s, i) => {
+      const row = el('div', 'sk-row');
+      if (s.ja) row.append(el('p', 'sk-ja', s.ja));
+      const parts = el('div', 'sk-parts');
+      s.parts.forEach((p, j) => {
+        if (j) parts.append(el('span', 'sk-arrow', '→'));
+        const k = i + '-' + j;
+        const open = skOpen.has(k);
+        const b = el('button', 'sk-part' + (open ? ' open' : ''));
+        b.type = 'button';
+        b.append(el('span', 'role', p.role || '？'), el('span', 'val', open ? p.en : '？'));
+        b.setAttribute('aria-label', (p.role || '部品') + '：' + (open ? p.en : '押すと英語が見えます'));
+        b.addEventListener('click', () => {
+          if (skOpen.has(k)) skOpen.delete(k); else skOpen.add(k);
+          renderSkeleton(sk);
+        });
+        parts.append(b);
+      });
+      row.append(parts);
+      body.append(row);
+    });
+    const all = [];
+    sk.forEach((s, i) => s.parts.forEach((p, j) => all.push(i + '-' + j)));
+    const rest = all.filter((k) => !skOpen.has(k));
+    $('sk-next').disabled = !rest.length;
+    $('sk-all').textContent = rest.length ? '全部見る' : '隠す';
+    $('sk-next').onclick = () => { if (rest.length) { skOpen.add(rest[0]); renderSkeleton(sk); } };
+    $('sk-all').onclick = () => {
+      if (rest.length) all.forEach((k) => skOpen.add(k)); else skOpen.clear();
+      renderSkeleton(sk);
+    };
   }
 
   function renderEval() {
@@ -623,6 +689,24 @@
   $('audience').addEventListener('change', () => { draft.audience = $('audience').value; saveDraft(); });
   $('mine').addEventListener('input', () => { draft.mine = $('mine').value; saveDraft(); });
   $('easy').addEventListener('input', () => { const e = curEasy(); if (e) { e.easyJa = $('easy').value; saveDraft(); } });
+  // 例文をランダムに入れる（直前と同じ例文は避ける）
+  const EXAMPLES = Array.isArray(window.COACH_EXAMPLES) ? window.COACH_EXAMPLES : [];
+  let lastExample = -1;
+  $('btn-example').hidden = !EXAMPLES.length;
+  $('btn-example').addEventListener('click', () => {
+    if (!EXAMPLES.length) return;
+    let i = Math.floor(Math.random() * EXAMPLES.length);
+    if (EXAMPLES.length > 1 && i === lastExample) i = (i + 1 + Math.floor(Math.random() * (EXAMPLES.length - 1))) % EXAMPLES.length;
+    lastExample = i;
+    const ex = EXAMPLES[i];
+    Object.assign(draft, { src: ex.src, scene: ex.scene || '', audience: ex.audience || '', easy: null, mine: '', ev: null, entryId: null, entry: null });
+    saveDraft();
+    editingSrc = false;
+    $('easy-status').hidden = true;
+    renderWrite();
+    $('btn-easy').focus();
+  });
+
   $('edit-src').addEventListener('click', () => {
     editingSrc = true;
     renderStep1();
