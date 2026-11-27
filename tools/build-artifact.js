@@ -12,7 +12,11 @@ const html = fs.readFileSync(input, 'utf8');
 
 const title = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '瞬間英作文';
 const css = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => read(m[1])).join('\n');
-let body = html.match(/<body>([\s\S]*)<\/body>/)[1];
+const bodyMatch = html.match(/<body([^>]*)>([\s\S]*)<\/body>/);
+let body = bodyMatch[2];
+// 公開時は body タグが自動で付くので、body の class はスクリプトで付け直す
+const bodyClass = (bodyMatch[1].match(/class="([^"]*)"/) || [])[1];
+if (bodyClass) body = `<script>document.body.className = ${JSON.stringify(bodyClass)};</script>\n` + body;
 body = body.replace(/<script src="([^"]+)"><\/script>/g,
   (m, p) => '<script>\n' + read(p).replace(/<\/script/gi, '<\\/script') + '</script>');
 

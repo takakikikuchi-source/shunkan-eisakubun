@@ -7,153 +7,199 @@
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="coach.css">
 </head>
-<body>
-  <header class="top">
-    <h1>英作文コーチ</h1>
-    <nav class="tabs" aria-label="画面の切り替え">
-      <button type="button" class="tab" data-tab="write" aria-current="page">書く</button>
-      <button type="button" class="tab" data-tab="review">復習 <span id="review-badge" class="badge" hidden></span></button>
-      <button type="button" class="tab" data-tab="history">履歴</button>
-    </nav>
+<body class="coach">
+  <header class="bar-top">
+    <div class="bar-inner">
+      <h1>英作文コーチ</h1>
+      <nav class="tabs" aria-label="画面の切り替え">
+        <button type="button" class="tab" data-tab="write" aria-current="page">書く</button>
+        <button type="button" class="tab" data-tab="review">復習<span id="review-badge" class="badge" hidden></span></button>
+        <button type="button" class="tab" data-tab="history">履歴</button>
+      </nav>
+    </div>
   </header>
 
   <main>
     <p id="env-warning" class="warn-box" hidden></p>
 
-    <!-- 書く -->
-    <section id="tab-write" class="screen">
-      <div class="card" id="step1">
-        <h2><span class="num">1</span>書きたい文章</h2>
-        <textarea id="src" rows="4" placeholder="例：先日の打ち合わせの件ですが、社内で検討した結果、来月から試験的に導入することになりました。詳細は追ってご連絡します。"></textarea>
-        <div class="selects">
-          <label>場面
-            <select id="scene">
-              <option value="">指定なし</option>
-              <option>社外メール</option>
-              <option>社内メール・チャット</option>
-              <option>会議での発言</option>
-              <option>プレゼン</option>
-              <option>商談・交渉</option>
-              <option>電話</option>
-              <option>雑談・あいさつ</option>
-            </select>
-          </label>
-          <label>相手
-            <select id="audience">
-              <option value="">指定なし</option>
-              <option>取引先・顧客</option>
-              <option>上司・役員</option>
-              <option>同僚</option>
-              <option>部下・後輩</option>
-              <option>初対面の相手</option>
-            </select>
-          </label>
+    <!-- 書く：PCは左に入力、右に添削結果 -->
+    <section id="tab-write" class="screen split">
+      <div class="pane pane-left">
+        <!-- 1 -->
+        <div class="block" id="step1">
+          <div class="block-head">
+            <span class="num">1</span><h2>書きたい文章</h2>
+            <button type="button" id="edit-src" class="link head-action" hidden>編集</button>
+          </div>
+          <div id="src-summary" class="src-summary" hidden>
+            <p id="src-summary-text" class="clamp"></p>
+            <div id="src-summary-tags" class="chips"></div>
+          </div>
+          <div id="src-editor" class="stack">
+            <textarea id="src" rows="3" class="grow" placeholder="例：先日の打ち合わせの件ですが、社内で検討した結果、来月から試験的に導入することになりました。詳細は追ってご連絡します。"></textarea>
+            <div class="toolbar">
+              <select id="scene" aria-label="場面">
+                <option value="">場面：指定なし</option>
+                <option>社外メール</option>
+                <option>社内メール・チャット</option>
+                <option>会議での発言</option>
+                <option>プレゼン</option>
+                <option>商談・交渉</option>
+                <option>電話</option>
+                <option>雑談・あいさつ</option>
+              </select>
+              <select id="audience" aria-label="相手">
+                <option value="">相手：指定なし</option>
+                <option>取引先・顧客</option>
+                <option>上司・役員</option>
+                <option>同僚</option>
+                <option>部下・後輩</option>
+                <option>初対面の相手</option>
+              </select>
+              <button type="button" id="btn-easy" class="primary push">言い換える</button>
+            </div>
+            <div class="status" id="easy-status" hidden>
+              <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
+              <button type="button" class="link stop">止める</button>
+            </div>
+          </div>
         </div>
-        <div class="row">
-          <button type="button" id="btn-easy" class="primary">英語にしやすい日本語にする</button>
+
+        <!-- 2 -->
+        <div class="block" id="step2" hidden>
+          <div class="block-head">
+            <span class="num">2</span><h2>英語にしやすい日本語</h2>
+          </div>
+          <textarea id="easy" rows="2" class="grow easy-text" aria-label="英語にしやすい日本語（直してもかまいません）"></textarea>
+          <div class="toggles">
+            <button type="button" class="chip-btn" id="toggle-points" aria-expanded="false">言い換えたところ<span id="points-count"></span></button>
+            <button type="button" class="chip-btn" id="toggle-phrases" aria-expanded="false">ヒント：使えそうな表現</button>
+          </div>
+          <ul id="easy-points" class="mini-list" hidden></ul>
+          <ul id="phrases" class="mini-list mono" hidden></ul>
         </div>
-        <div class="status" id="easy-status" hidden>
-          <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
-          <button type="button" class="link stop">止める</button>
+
+        <!-- 3 -->
+        <div class="block" id="step3" hidden>
+          <div class="block-head">
+            <span class="num">3</span><h2>あなたの英文</h2>
+          </div>
+          <textarea id="mine" rows="3" class="grow en-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="上の日本語を英語にしてください"></textarea>
+          <div class="toolbar">
+            <span class="muted small key-hint">Ctrl + Enter でも添削できます</span>
+            <button type="button" id="btn-eval" class="primary push">添削する</button>
+          </div>
+          <div class="status" id="eval-status" hidden>
+            <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
+            <button type="button" class="link stop">止める</button>
+          </div>
         </div>
       </div>
 
-      <div class="card" id="step2" hidden>
-        <h2><span class="num">2</span>英語にしやすい日本語</h2>
-        <textarea id="easy" rows="3"></textarea>
-        <p class="muted small">この日本語を見て英文を考えます。必要なら直してもかまいません。</p>
-        <h3>言い換えたところ</h3>
-        <ul id="easy-points" class="points"></ul>
-        <details id="phrases-box">
-          <summary>ヒント：使えそうな表現を見る</summary>
-          <ul id="phrases" class="phrases"></ul>
-        </details>
-      </div>
-
-      <div class="card" id="step3" hidden>
-        <h2><span class="num">3</span>あなたの英文</h2>
-        <textarea id="mine" rows="4" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="上の日本語を英語にしてください"></textarea>
-        <div class="row">
-          <button type="button" id="btn-eval" class="primary">添削する</button>
-        </div>
-        <div class="status" id="eval-status" hidden>
-          <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
-          <button type="button" class="link stop">止める</button>
-        </div>
-      </div>
-
-      <div class="card" id="step4" hidden>
-        <h2><span class="num">4</span>添削結果</h2>
-        <div id="eval-view"></div>
-        <p id="saved-status" class="muted small"></p>
-        <div class="row">
-          <button type="button" id="btn-retry" class="secondary">書き直してもう一度添削</button>
-          <button type="button" id="btn-new" class="primary">新しい文章を書く</button>
+      <!-- 4 -->
+      <div class="pane pane-right" id="step4">
+        <div class="block result-block">
+          <div class="block-head">
+            <span class="num">4</span><h2>添削結果</h2>
+            <span id="saved-status" class="muted small head-action"></span>
+          </div>
+          <div id="eval-empty" class="empty-state">
+            <p>英文を書いて「添削する」を押すと、ここに結果が出ます。</p>
+            <ul>
+              <li>点数（正確さ・自然さ・丁寧さ）</li>
+              <li>直した英文と、直した理由</li>
+              <li>より自然な言い方・お手本</li>
+            </ul>
+          </div>
+          <div id="eval-view"></div>
+          <div class="toolbar" id="eval-actions" hidden>
+            <button type="button" id="btn-retry" class="secondary">書き直す</button>
+            <button type="button" id="btn-new" class="primary push">新しい文章を書く</button>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- 復習 -->
     <section id="tab-review" class="screen" hidden>
-      <div id="review-home">
-        <h2>復習</h2>
+      <div id="review-home" class="block narrow">
+        <div class="block-head"><h2>復習</h2></div>
         <p id="review-summary" class="muted"></p>
-        <div class="row">
+        <div class="toolbar">
           <button type="button" id="btn-review-old" class="primary">まだ復習していない順に10問</button>
           <button type="button" id="btn-review-random" class="secondary">ランダムに10問</button>
         </div>
       </div>
 
-      <div id="review-quiz" hidden>
-        <div class="quiz-head">
-          <span id="rv-progress" class="muted"></span>
-          <button type="button" id="rv-quit" class="link">やめる</button>
+      <div id="review-quiz" class="split" hidden>
+        <div class="pane pane-left">
+          <div class="block">
+            <div class="quiz-head">
+              <span id="rv-progress" class="muted small"></span>
+              <button type="button" id="rv-quit" class="link">やめる</button>
+            </div>
+            <div class="bar"><div id="rv-bar"></div></div>
+            <p id="rv-easy" class="q-text"></p>
+            <button type="button" class="chip-btn" id="toggle-rv-src" aria-expanded="false">元の文章</button>
+            <p id="rv-src" class="muted small" hidden></p>
+            <form id="rv-form" class="stack" autocomplete="off">
+              <textarea id="rv-answer" rows="3" class="grow en-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="英語で入力"></textarea>
+              <div class="toolbar">
+                <span class="muted small key-hint">Ctrl + Enter で判定</span>
+                <button type="button" id="rv-giveup" class="secondary push">わからない</button>
+                <button type="submit" class="primary">判定</button>
+              </div>
+            </form>
+          </div>
         </div>
-        <div class="bar"><div id="rv-bar"></div></div>
-        <p id="rv-easy" class="ja"></p>
-        <details class="src-box">
-          <summary>元の文章を見る</summary>
-          <p id="rv-src" class="muted"></p>
-        </details>
-        <form id="rv-form" autocomplete="off">
-          <textarea id="rv-answer" rows="3" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="英語で入力して Ctrl+Enter（スマホは「判定」）"></textarea>
-          <div class="row">
-            <button type="submit" class="primary">判定</button>
-            <button type="button" id="rv-giveup" class="secondary">わからない</button>
+        <div class="pane pane-right">
+          <div class="block result-block" id="rv-feedback-block">
+            <div id="rv-empty" class="empty-state"><p>判定すると、ここにお手本との違いが出ます。</p></div>
+            <div id="rv-feedback" hidden>
+              <div class="verdict-row">
+                <span id="rv-verdict" class="verdict"></span>
+              </div>
+              <dl class="compare">
+                <dt>あなた</dt><dd id="rv-your" class="en"></dd>
+                <dt>お手本</dt><dd><span id="rv-correct" class="en"></span> <span id="rv-speak-slot"></span></dd>
+              </dl>
+              <p id="rv-others" class="muted small" hidden></p>
+              <div class="toolbar">
+                <button type="button" id="rv-ask" class="secondary">Claudeに添削してもらう</button>
+                <button type="button" id="rv-next" class="primary push">次へ</button>
+              </div>
+              <div class="status" id="rv-status" hidden>
+                <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
+                <button type="button" class="link stop">止める</button>
+              </div>
+              <div id="rv-eval"></div>
+            </div>
           </div>
-        </form>
-        <div id="rv-feedback" class="feedback" hidden>
-          <p id="rv-verdict" class="verdict"></p>
-          <div class="cmp"><span class="lbl">あなた</span><p id="rv-your" class="en"></p></div>
-          <div class="cmp"><span class="lbl">お手本</span><p id="rv-correct" class="en"></p></div>
-          <p id="rv-others" class="others" hidden></p>
-          <div class="row">
-            <button type="button" id="rv-speak" class="secondary">読み上げ</button>
-            <button type="button" id="rv-ask" class="secondary">Claudeに添削してもらう</button>
-            <button type="button" id="rv-next" class="primary">次へ</button>
-          </div>
-          <div class="status" id="rv-status" hidden>
-            <span class="spinner" aria-hidden="true"></span><span class="status-text"></span>
-            <button type="button" class="link stop">止める</button>
-          </div>
-          <div id="rv-eval"></div>
         </div>
       </div>
 
-      <div id="review-result" hidden>
-        <h2>結果</h2>
+      <div id="review-result" class="block narrow" hidden>
+        <div class="block-head"><h2>結果</h2></div>
         <p id="rv-result-text" class="big"></p>
-        <div class="row">
-          <button type="button" id="rv-back" class="primary">復習のトップに戻る</button>
-        </div>
+        <div class="toolbar"><button type="button" id="rv-back" class="primary">復習のトップに戻る</button></div>
       </div>
     </section>
 
-    <!-- 履歴 -->
-    <section id="tab-history" class="screen" hidden>
-      <h2>履歴 <span id="history-count" class="muted small"></span></h2>
-      <p id="history-empty" class="muted">まだ保存された文章はありません。「書く」で添削すると、ここに保存されます。</p>
-      <ul id="history-list" class="history"></ul>
+    <!-- 履歴：PCは左に一覧、右に詳細 -->
+    <section id="tab-history" class="screen split history-split" hidden>
+      <div class="pane pane-left" id="history-list-pane">
+        <div class="block list-block">
+          <div class="block-head"><h2>履歴</h2><span id="history-count" class="muted small head-action"></span></div>
+          <p id="history-empty" class="muted small">まだ保存された文章はありません。「書く」で添削すると、ここに保存されます。</p>
+          <ul id="history-list" class="h-list"></ul>
+        </div>
+      </div>
+      <div class="pane pane-right" id="history-detail-pane">
+        <div class="block result-block">
+          <button type="button" id="history-back" class="link back-link">← 一覧に戻る</button>
+          <div id="history-detail"><div class="empty-state"><p>左の一覧から文章を選ぶと、ここに詳細が出ます。</p></div></div>
+        </div>
+      </div>
     </section>
   </main>
 

@@ -23,6 +23,8 @@
   const arr = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => (v == null ? '' : String(v));
   const clone = (v) => JSON.parse(JSON.stringify(v));
+  const narrow = () => window.matchMedia('(max-width: 959px)').matches;
+  const scoreClass = (s) => (s >= 80 ? 'hi' : s >= 60 ? 'mid' : 'lo');
 
   // ---- 実行環境 ----
   let sample = null;
@@ -35,6 +37,31 @@
     w.hidden = false;
   }
 
+  // ---- 入力欄を中身に合わせて伸ばす ----
+  function autoGrow(t) {
+    t.style.height = 'auto';
+    t.style.height = (t.scrollHeight + 2) + 'px';
+  }
+  for (const t of document.querySelectorAll('textarea.grow')) t.addEventListener('input', () => autoGrow(t));
+  const growAll = () => { for (const t of document.querySelectorAll('textarea.grow')) if (t.offsetParent) autoGrow(t); };
+  window.addEventListener('resize', growAll);
+
+  // ---- 開閉ボタン ----
+  function bindToggle(btn, target) {
+    btn.addEventListener('click', () => {
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      target.hidden = !open;
+    });
+  }
+  function closeToggle(btn, target) {
+    btn.setAttribute('aria-expanded', 'false');
+    target.hidden = true;
+  }
+  bindToggle($('toggle-points'), $('easy-points'));
+  bindToggle($('toggle-phrases'), $('phrases'));
+  bindToggle($('toggle-rv-src'), $('rv-src'));
+
   // ---- タブ ----
   function showTab(name) {
     for (const t of document.querySelectorAll('.tab')) {
@@ -43,6 +70,7 @@
     }
     for (const s of document.querySelectorAll('main > .screen')) s.hidden = s.id !== 'tab-' + name;
     window.scrollTo(0, 0);
+    growAll();
   }
   for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => showTab(t.dataset.tab));
 
@@ -63,17 +91,33 @@
     if (voice) u.voice = voice;
     speechSynthesis.speak(u);
   }
-  function sayButton(text) {
-    const b = el('button', 'secondary say', '読み上げ');
+  function speakButton(text) {
+    const b = el('button', 'icon-btn');
     b.type = 'button';
+    b.title = '読み上げ';
+    b.setAttribute('aria-label', '読み上げ');
     b.hidden = !tts;
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    for (const d of ['M11 5 6 9H2v6h4l5 4V5z', 'M15.5 8.5a5 5 0 0 1 0 7', 'M19 5a10 10 0 0 1 0 14']) {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.append(p);
+    }
+    b.append(svg);
     b.addEventListener('click', () => speak(text));
     return b;
   }
 
   // ---- Claude への質問 ----
   const ERR = {
-    not_granted: 'Claude の利用が許可されていません。ページ上部のメニューから許可してください。',
+    not_granted: 'Claude の利用が許可されていません。ページのメニューから許可してください。',
     sampling_disabled: 'このアカウントでは Claude を使えません。',
     rate_limited: '利用回数の上限に達しました。少し時間をおいてからもう一度押してください。',
     session_expired: 'claude.ai へのログインが切れています。ログインし直してください。',
@@ -210,86 +254,107 @@
   }
 
   // ---- 添削結果の表示 ----
-  function enWithMarks(text, marks) {
-    const p = el('p', 'en-block');
-    const tokens = text.trim().split(/\s+/);
-    tokens.forEach((t, i) => {
-      if (i) p.append(' ');
-      p.append(el('span', marks && marks[i] ? 'ins' : '', t));
-    });
-    return p;
+  function enBox(text, opts) {
+    const box = el('div', 'en-box' + (opts && opts.model ? ' model' : ''));
+    const p = el('p');
+    if (opts && opts.marks) {
+      text.trim().split(/\s+/).forEach((t, i) => {
+        if (i) p.append(' ');
+        p.append(el('span', opts.marks[i] ? 'ins' : '', t));
+      });
+    } else {
+      p.textContent = text;
+    }
+    box.append(p, speakButton(text));
+    return box;
+  }
+
+  function section(title) {
+    const s = el('div', 'ev-sec');
+    s.append(el('h3', '', title));
+    return s;
   }
 
   function buildEvalView(ev, mine) {
     const root = el('div', 'ev');
 
-    const row = el('div', 'score-row');
-    const score = el('div', 'score ' + (ev.score >= 80 ? 'hi' : ev.score >= 60 ? 'mid' : 'lo'), String(ev.score));
-    score.append(el('small', '', '/100'));
-    const dl = el('dl', 'breakdown');
-    for (const [k, label, max] of [['accuracy', '正確さ', 40], ['naturalness', '自然さ', 30], ['tone', '丁寧さ・トーン', 30]]) {
-      const d = el('div');
-      d.append(el('dt', '', label), el('dd', '', ev.breakdown[k] + '/' + max));
-      dl.append(d);
+    // 見出し：点数・講評・内訳・トーン
+    const head = el('div', 'ev-head');
+    head.append(el('div', 'ring ' + scoreClass(ev.score), String(ev.score)));
+    const meta = el('div', 'ev-meta');
+    if (ev.summary) meta.append(el('p', 'ev-summary', ev.summary));
+    const meters = el('div', 'meters');
+    for (const [k, label, max] of [['accuracy', '正確さ', 40], ['naturalness', '自然さ', 30], ['tone', '丁寧さ', 30]]) {
+      const m = el('div', 'meter');
+      const top = el('div', 'meter-top');
+      top.append(el('span', '', label), el('b', '', ev.breakdown[k] + '/' + max));
+      const track = el('div', 'track');
+      const fill = el('div', 'fill');
+      fill.style.width = Math.round(ev.breakdown[k] / max * 100) + '%';
+      track.append(fill);
+      m.append(top, track);
+      meters.append(m);
     }
-    row.append(score, dl);
-    root.append(row);
-    if (ev.summary) root.append(el('p', 'summary', ev.summary));
+    meta.append(meters);
+    head.append(meta);
+    const tone = el('p', 'tone-line');
+    const cls = /適切/.test(ev.tone.label) ? 'ok' : /失礼/.test(ev.tone.label) ? 'ng' : 'warn';
+    tone.append(el('span', 'pill ' + cls, 'トーン：' + ev.tone.label), ev.tone.comment);
+    head.append(tone);
+    root.append(head);
 
-    root.append(el('h3', '', '直した英文'));
+    // 直した英文
     const d = window.SEJudge ? SEJudge.diff(mine, ev.corrected) : null;
     const same = d && !d.answerMarks.some(Boolean) && !d.userMarks.some(Boolean);
-    const cRow = el('div', 'best-row');
-    cRow.append(enWithMarks(ev.corrected, d && d.answerMarks), sayButton(ev.corrected));
-    root.append(cRow);
-    if (same) root.append(el('p', 'muted small', '直すところはありませんでした。'));
+    const sc = section(same ? '直した英文（直すところはありませんでした）' : '直した英文（印が直したところ）');
+    sc.append(enBox(ev.corrected, { marks: d && d.answerMarks }));
+    root.append(sc);
 
-    root.append(el('h3', '', '直したところと理由'));
+    // 理由
     if (ev.changes.length) {
-      const ul = el('ul', 'ev-list');
+      const s = section('直したところと理由（' + ev.changes.length + '）');
+      const list = el('div', 'chg-list');
       for (const c of ev.changes) {
-        const li = el('li', 'change');
-        if (c.from) li.append(el('span', 'from', c.from));
-        if (c.to) li.append(el('span', 'to', '→ ' + c.to));
-        if (c.reason) li.append(el('span', 'why', c.reason));
-        ul.append(li);
+        const item = el('div', 'chg');
+        const line = el('div', 'chg-line');
+        if (c.from) line.append(el('span', 'from', c.from));
+        if (c.from && c.to) line.append(el('span', 'arrow', '→'));
+        if (c.to) line.append(el('span', 'to', c.to));
+        item.append(line);
+        if (c.reason) item.append(el('p', 'why', c.reason));
+        list.append(item);
       }
-      root.append(ul);
-    } else {
-      root.append(el('p', 'muted small', 'ありません。'));
+      s.append(list);
+      root.append(s);
     }
 
-    if (ev.good.length) {
-      root.append(el('h3', '', '良かったところ'));
-      const ul = el('ul', 'ev-list');
-      for (const g of ev.good) ul.append(el('li', '', g));
-      root.append(ul);
-    }
-
+    // 自然な言い方
     if (ev.natural.length) {
-      root.append(el('h3', '', 'より自然な言い方'));
-      const ul = el('ul', 'ev-list');
+      const s = section('より自然な言い方');
+      const list = el('div', 'alt-list');
       for (const n of ev.natural) {
-        const li = el('li', 'nat');
-        const line = el('div', 'best-row');
-        line.append(el('span', 'en-line', n.en), sayButton(n.en));
-        li.append(line);
-        if (n.nuance) li.append(el('span', 'nuance', n.nuance));
-        ul.append(li);
+        const a = el('div', 'alt');
+        a.append(el('span', 'en', n.en), speakButton(n.en));
+        if (n.nuance) a.append(el('span', 'nuance', n.nuance));
+        list.append(a);
       }
-      root.append(ul);
+      s.append(list);
+      root.append(s);
     }
 
-    root.append(el('h3', '', '丁寧さ・トーン'));
-    const tone = el('p');
-    const cls = /適切/.test(ev.tone.label) ? 'ok' : /失礼/.test(ev.tone.label) ? 'ng' : 'warn';
-    tone.append(el('span', 'pill ' + cls, ev.tone.label), ev.tone.comment);
-    root.append(tone);
+    // お手本
+    const sb = section('お手本（復習で使います）');
+    sb.append(enBox(ev.best, { model: true }));
+    root.append(sb);
 
-    root.append(el('h3', '', 'お手本（復習で使います）'));
-    const bRow = el('div', 'best-row');
-    bRow.append(el('p', 'en-block', ev.best), sayButton(ev.best));
-    root.append(bRow);
+    // 良かったところ
+    if (ev.good.length) {
+      const s = section('良かったところ');
+      const ul = el('ul', 'good');
+      for (const g of ev.good) ul.append(el('li', '', g));
+      s.append(ul);
+      root.append(s);
+    }
     return root;
   }
 
@@ -303,6 +368,7 @@
 
   function entryFromEval(base, ev, mine, from) {
     const e = base ? clone(base) : { createdAt: Date.now(), review: { count: 0, correct: 0, lastAt: 0 } };
+    delete e.id;
     e.updatedAt = Date.now();
     e.best = ev.best;
     e.corrected = ev.corrected;
@@ -321,41 +387,64 @@
     return ref.id;
   }
 
-  // ---- 1〜4: 書く ----
+  // ---- 書く ----
   const draft = Object.assign({ src: '', scene: '', audience: '', easy: null, mine: '', ev: null, entryId: null, entry: null },
     local.get('coach.draft', {}));
   const saveDraft = () => local.set('coach.draft', draft);
+  let editingSrc = false;
+
+  function renderStep1() {
+    const collapsed = !!draft.easy && !editingSrc;
+    $('src-editor').hidden = collapsed;
+    $('src-summary').hidden = !collapsed;
+    $('edit-src').hidden = !collapsed;
+    $('step1').classList.toggle('done', !!draft.easy);
+    if (collapsed) {
+      $('src-summary-text').textContent = draft.src;
+      const tags = $('src-summary-tags');
+      tags.textContent = '';
+      for (const t of [draft.scene, draft.audience]) if (t) tags.append(el('span', 'chip', t));
+    }
+  }
 
   function renderEasy() {
     const e = draft.easy;
     $('step2').hidden = !e;
     $('step3').hidden = !e;
+    $('step2').classList.toggle('done', !!e);
     if (!e) return;
     $('easy').value = e.easyJa;
     const pts = $('easy-points');
     pts.textContent = '';
     for (const p of e.points) pts.append(el('li', '', p));
+    $('points-count').textContent = e.points.length ? '（' + e.points.length + '）' : '';
+    $('toggle-points').hidden = !e.points.length;
     const ph = $('phrases');
     ph.textContent = '';
     for (const p of e.keyPhrases) ph.append(el('li', '', p));
-    $('phrases-box').hidden = !e.keyPhrases.length;
+    $('toggle-phrases').hidden = !e.keyPhrases.length;
   }
 
   function renderEval() {
-    $('step4').hidden = !draft.ev;
+    const has = !!draft.ev;
+    $('eval-empty').hidden = has;
+    $('eval-actions').hidden = !has;
+    $('step3').classList.toggle('done', has);
     const view = $('eval-view');
     view.textContent = '';
-    if (draft.ev) view.append(buildEvalView(draft.ev, draft.mine));
+    if (has) view.append(buildEvalView(draft.ev, draft.mine));
   }
 
-  function restoreDraft() {
+  function renderWrite() {
     $('src').value = draft.src;
     $('scene').value = draft.scene;
     $('audience').value = draft.audience;
     $('mine').value = draft.mine;
+    renderStep1();
     renderEasy();
     renderEval();
-    $('saved-status').textContent = draft.entryId ? '保存済み（履歴・復習に追加されています）' : '';
+    $('saved-status').textContent = draft.entryId ? '保存済み' : '';
+    growAll();
   }
 
   $('src').addEventListener('input', () => { draft.src = $('src').value; saveDraft(); });
@@ -363,6 +452,12 @@
   $('audience').addEventListener('change', () => { draft.audience = $('audience').value; saveDraft(); });
   $('mine').addEventListener('input', () => { draft.mine = $('mine').value; saveDraft(); });
   $('easy').addEventListener('input', () => { if (draft.easy) { draft.easy.easyJa = $('easy').value; saveDraft(); } });
+  $('edit-src').addEventListener('click', () => {
+    editingSrc = true;
+    renderStep1();
+    growAll();
+    $('src').focus();
+  });
 
   $('btn-easy').addEventListener('click', async () => {
     const src = $('src').value.trim();
@@ -372,12 +467,11 @@
       const r = normEasy(await ask(easyPrompt(src, draft.scene, draft.audience), box, '英語にしやすい日本語を考えています', $('btn-easy')));
       Object.assign(draft, { src, easy: r, mine: '', ev: null, entryId: null, entry: null });
       saveDraft();
-      $('mine').value = '';
-      $('saved-status').textContent = '';
-      renderEasy();
-      renderEval();
-      $('step2').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      $('mine').focus({ preventScroll: true });
+      editingSrc = false;
+      closeToggle($('toggle-points'), $('easy-points'));
+      closeToggle($('toggle-phrases'), $('phrases'));
+      renderWrite();
+      $('mine').focus();
     } catch (e) {
       showError(box, e);
     }
@@ -400,15 +494,14 @@
     draft.ev = ev;
     saveDraft();
     renderEval();
-    $('step4').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (narrow()) $('step4').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     // 保存
     const status = $('saved-status');
-    if (!entriesCol) { status.textContent = '保存機能が使えないため、この添削は保存されていません。'; return; }
+    if (!entriesCol) { status.textContent = '保存されていません'; return; }
     // 保存済みなら最新の保存内容（復習の記録を含む）を土台にする
     const saved = draft.entryId && entries.find((x) => x.id === draft.entryId);
     const base = saved ? clone(saved) : (draft.entry || { createdAt: Date.now(), review: { count: 0, correct: 0, lastAt: 0 } });
-    delete base.id;
     Object.assign(base, { src: ctx.src, scene: draft.scene, audience: draft.audience, easyJa: ctx.easyJa,
       points: draft.easy.points, keyPhrases: draft.easy.keyPhrases, sceneGuess: draft.easy.sceneGuess, tone: draft.easy.tone });
     const entry = entryFromEval(base, ev, mine, 'write');
@@ -417,9 +510,9 @@
       draft.entryId = await saveEntry(draft.entryId, entry);
       draft.entry = entry;
       saveDraft();
-      status.textContent = '保存しました（履歴・復習に追加されています）';
+      status.textContent = '保存しました';
     } catch (e) {
-      status.textContent = '保存できませんでした：' + (e && e.code === 'quota_exceeded' ? '保存できる件数の上限です。履歴から古いものを削除してください。' : '通信を確認して、もう一度「添削する」を押してください。');
+      status.textContent = e && e.code === 'quota_exceeded' ? '保存の上限です（履歴から削除してください）' : '保存できませんでした';
     }
   }
   $('btn-eval').addEventListener('click', evaluateWrite);
@@ -428,13 +521,15 @@
   });
 
   $('btn-retry').addEventListener('click', () => {
-    $('step3').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    $('mine').focus({ preventScroll: true });
+    if (narrow()) $('step3').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('mine').focus({ preventScroll: !narrow() });
+    $('mine').select();
   });
   $('btn-new').addEventListener('click', () => {
     Object.assign(draft, { src: '', easy: null, mine: '', ev: null, entryId: null, entry: null });
     saveDraft();
-    restoreDraft();
+    editingSrc = false;
+    renderWrite();
     window.scrollTo(0, 0);
     $('src').focus();
   });
@@ -446,7 +541,7 @@
     const usable = entries.filter((e) => e.best);
     const never = usable.filter((e) => !(e.review && e.review.count)).length;
     $('review-summary').textContent = usable.length
-      ? '保存した文章 ' + usable.length + '件（まだ復習していない文章 ' + never + '件）'
+      ? '保存した文章 ' + usable.length + '件（まだ復習していない文章 ' + never + '件）。「英語にしやすい日本語」を見て、英文をタイピングで答えます。'
       : 'まだ保存された文章はありません。「書く」で添削すると、ここで復習できるようになります。';
     $('btn-review-old').disabled = !usable.length;
     $('btn-review-random').disabled = !usable.length;
@@ -476,19 +571,23 @@
     $('rv-bar').style.width = (rv.i / rv.list.length * 100) + '%';
     $('rv-easy').textContent = e.easyJa || e.src;
     $('rv-src').textContent = e.src;
-    $('rv-answer').value = '';
-    $('rv-answer').readOnly = false;
+    closeToggle($('toggle-rv-src'), $('rv-src'));
+    const a = $('rv-answer');
+    a.value = '';
+    a.readOnly = false;
+    autoGrow(a);
     $('rv-form').querySelectorAll('button').forEach((b) => { b.disabled = false; });
     $('rv-feedback').hidden = true;
+    $('rv-empty').hidden = false;
     $('rv-eval').textContent = '';
     $('rv-status').hidden = true;
     rv.cur = null;
-    $('rv-answer').focus();
+    a.focus();
   }
 
   function renderTokens(target, tokens, marks, cls) {
     target.textContent = '';
-    if (!tokens.length) { target.append(el('span', 'empty', '（未回答）')); return; }
+    if (!tokens.length) { target.append(el('span', 'muted', '（未回答）')); return; }
     tokens.forEach((t, i) => {
       if (i) target.append(' ');
       target.append(el('span', marks[i] ? cls : '', t));
@@ -511,13 +610,17 @@
     const showDiff = r.result !== 'correct';
     renderTokens($('rv-your'), r.userTokens, showDiff ? r.userMarks : [], 'bad');
     renderTokens($('rv-correct'), r.answerTokens, showDiff ? r.answerMarks : [], 'miss');
+    const slot = $('rv-speak-slot');
+    slot.textContent = '';
+    slot.append(speakButton(r.answer));
     const others = answersFor(e).filter((a) => a !== r.answer);
     $('rv-others').hidden = !others.length;
     $('rv-others').textContent = others.length ? 'ほかの正解: ' + others.join(' / ') : '';
     $('rv-ask').hidden = !text || !sample;
-    $('rv-speak').hidden = !tts;
+    $('rv-empty').hidden = true;
     $('rv-feedback').hidden = false;
-    $('rv-next').focus();
+    $('rv-next').focus({ preventScroll: !narrow() });
+    if (narrow()) $('rv-feedback-block').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     if (entriesCol) {
       const rev = Object.assign({ count: 0, correct: 0, lastAt: 0 }, e.review || {});
@@ -535,7 +638,6 @@
     if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); submitReview(false); }
   });
   $('rv-giveup').addEventListener('click', () => submitReview(true));
-  $('rv-speak').addEventListener('click', () => rv && rv.cur && speak(rv.cur.answer));
 
   $('rv-ask').addEventListener('click', async () => {
     const c = rv && rv.cur;
@@ -584,6 +686,7 @@
       if (tts) speechSynthesis.cancel();
     } else {
       showReviewQuestion();
+      window.scrollTo(0, 0);
     }
   });
   $('rv-quit').addEventListener('click', () => {
@@ -599,77 +702,146 @@
   $('btn-review-old').addEventListener('click', () => startReview('old'));
   $('btn-review-random').addEventListener('click', () => startReview('random'));
 
-  // ---- 履歴 ----
-  const openIds = new Set();
+  // ---- 履歴（一覧と詳細） ----
+  let selectedId = null;
+  let armedDelete = false;
   const fmtDate = (ms) => {
     const d = new Date(ms);
     return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
   };
 
-  function renderHistory() {
+  function renderHistoryList() {
     const list = $('history-list');
     list.textContent = '';
     $('history-empty').hidden = entries.length > 0;
-    $('history-count').textContent = entries.length ? '（' + entries.length + '件）' : '';
+    $('history-count').textContent = entries.length ? entries.length + '件' : '';
     for (const e of entries) {
       const li = el('li');
-      const det = el('details');
-      det.open = openIds.has(e.id);
-      det.addEventListener('toggle', () => { if (det.open) openIds.add(e.id); else openIds.delete(e.id); });
-      const sum = el('summary');
-      sum.append(el('span', 'h-src', str(e.src).split('\n')[0]), el('span', 'h-score', (e.bestScore || 0) + '点'));
+      const b = el('button', 'h-item');
+      b.type = 'button';
+      if (e.id === selectedId) b.setAttribute('aria-current', 'true');
+      b.append(el('span', 'h-src', str(e.src).split('\n')[0]), el('span', 'h-score ' + scoreClass(e.bestScore || 0), (e.bestScore || 0) + '点'));
       const meta = [fmtDate(e.createdAt), e.scene || e.sceneGuess, e.review && e.review.count ? '復習 ' + e.review.correct + '/' + e.review.count : '未復習'].filter(Boolean).join(' ・ ');
-      sum.append(el('span', 'h-meta', meta));
-      det.append(sum);
-
-      const body = el('div', 'h-body');
-      body.append(el('h4', '', '元の文章'), el('p', '', e.src));
-      body.append(el('h4', '', '英語にしやすい日本語'), el('p', '', e.easyJa));
-      body.append(el('h4', '', 'お手本'));
-      const b = el('div', 'best-row');
-      b.append(el('p', 'en-block', e.best), sayButton(e.best));
-      body.append(b);
-      if (arr(e.natural).length) {
-        body.append(el('h4', '', 'より自然な言い方'));
-        const ul = el('ul', 'ev-list');
-        for (const n of e.natural) {
-          const it = el('li', 'nat');
-          it.append(el('span', 'en-line', n.en));
-          if (n.nuance) it.append(el('span', 'nuance', n.nuance));
-          ul.append(it);
-        }
-        body.append(ul);
-      }
-      const last = arr(e.attempts).slice(-1)[0];
-      if (last) {
-        body.append(el('h4', '', 'あなたの英文（最新・' + last.score + '点）'), el('p', 'en-block', last.en));
-      }
-      const del = el('button', 'secondary danger', 'この文章を削除');
-      del.type = 'button';
-      let armed = false;
-      del.addEventListener('click', async () => {
-        if (!armed) { armed = true; del.textContent = 'もう一度押すと削除します'; return; }
-        del.disabled = true;
-        try {
-          await entriesCol.doc(e.id).delete();
-          if (draft.entryId === e.id) { draft.entryId = null; draft.entry = null; saveDraft(); }
-        } catch (err) {
-          del.disabled = false;
-          del.textContent = '削除できませんでした。もう一度押してください';
-          armed = false;
-        }
+      b.append(el('span', 'h-meta', meta));
+      b.addEventListener('click', () => {
+        selectedId = e.id;
+        armedDelete = false;
+        $('tab-history').classList.add('show-detail');
+        renderHistory();
+        if (narrow()) window.scrollTo(0, 0);
       });
-      const row = el('div', 'row');
-      row.append(del);
-      body.append(row);
-      det.append(body);
-      li.append(det);
+      li.append(b);
       list.append(li);
     }
   }
 
+  function renderHistoryDetail() {
+    const box = $('history-detail');
+    box.textContent = '';
+    const e = entries.find((x) => x.id === selectedId);
+    if (!e) {
+      const empty = el('div', 'empty-state');
+      empty.append(el('p', '', entries.length ? '左の一覧から文章を選ぶと、ここに詳細が出ます。' : 'まだ保存された文章はありません。'));
+      box.append(empty);
+      $('tab-history').classList.remove('show-detail');
+      return;
+    }
+    const d = el('div', 'detail');
+    const head = el('div', 'ev-sec');
+    const meta = [fmtDate(e.createdAt), e.scene || e.sceneGuess, e.audience, '最高 ' + (e.bestScore || 0) + '点',
+      e.review && e.review.count ? '復習 ' + e.review.correct + '/' + e.review.count + ' 正解' : '未復習'].filter(Boolean).join(' ・ ');
+    head.append(el('h3', '', meta), el('p', 'src', e.src));
+    d.append(head);
+
+    const se = section('英語にしやすい日本語');
+    const easy = el('div', 'en-box');
+    easy.append(el('p', '', e.easyJa));
+    se.append(easy);
+    d.append(se);
+
+    const sb = section('お手本');
+    sb.append(enBox(e.best, { model: true }));
+    d.append(sb);
+
+    if (arr(e.natural).length) {
+      const s = section('より自然な言い方');
+      const list = el('div', 'alt-list');
+      for (const n of e.natural) {
+        const a = el('div', 'alt');
+        a.append(el('span', 'en', n.en), speakButton(n.en));
+        if (n.nuance) a.append(el('span', 'nuance', n.nuance));
+        list.append(a);
+      }
+      s.append(list);
+      d.append(s);
+    }
+
+    if (e.lastEval && e.lastMine) {
+      const s = section('最新の添削（あなたの英文：' + e.lastMine + '）');
+      const btn = el('button', 'chip-btn', '添削結果を見る');
+      btn.type = 'button';
+      btn.setAttribute('aria-expanded', 'false');
+      const holder = el('div');
+      holder.hidden = true;
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        btn.setAttribute('aria-expanded', String(open));
+        holder.hidden = !open;
+        if (open && !holder.firstChild) holder.append(buildEvalView(e.lastEval, e.lastMine));
+      });
+      s.append(btn, holder);
+      d.append(s);
+    }
+
+    const actions = el('div', 'detail-actions');
+    const again = el('button', 'primary', 'この文章でもう一度書く');
+    again.type = 'button';
+    again.addEventListener('click', () => {
+      Object.assign(draft, {
+        src: e.src, scene: e.scene || '', audience: e.audience || '',
+        easy: { easyJa: e.easyJa, points: arr(e.points), keyPhrases: arr(e.keyPhrases), sceneGuess: str(e.sceneGuess), tone: str(e.tone) },
+        mine: '', ev: null, entryId: e.id, entry: null,
+      });
+      saveDraft();
+      editingSrc = false;
+      showTab('write');
+      renderWrite();
+      $('mine').focus();
+    });
+    const del = el('button', 'secondary danger', armedDelete ? 'もう一度押すと削除します' : '削除');
+    del.type = 'button';
+    del.addEventListener('click', async () => {
+      if (!armedDelete) { armedDelete = true; del.textContent = 'もう一度押すと削除します'; return; }
+      del.disabled = true;
+      try {
+        await entriesCol.doc(e.id).delete();
+        if (draft.entryId === e.id) { draft.entryId = null; draft.entry = null; saveDraft(); }
+        selectedId = null;
+        armedDelete = false;
+      } catch (err) {
+        del.disabled = false;
+        armedDelete = false;
+        del.textContent = '削除できませんでした';
+      }
+    });
+    actions.append(again, del);
+    d.append(actions);
+    box.append(d);
+  }
+
+  function renderHistory() {
+    if (!narrow() && !selectedId && entries.length) selectedId = entries[0].id;
+    renderHistoryList();
+    renderHistoryDetail();
+  }
+  $('history-back').addEventListener('click', () => {
+    $('tab-history').classList.remove('show-detail');
+    selectedId = null;
+    renderHistory();
+  });
+
   // ---- 起動 ----
-  restoreDraft();
+  renderWrite();
   renderReviewHome();
   renderHistory();
 
