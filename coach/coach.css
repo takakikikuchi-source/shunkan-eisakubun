@@ -130,6 +130,23 @@ body.coach .icon-btn {
   background: var(--surface); color: var(--accent); border: 1px solid var(--border);
 }
 .icon-btn svg { width: 16px; height: 16px; }
+body.coach .icon-btn.playing { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+/* ---- 読み上げの設定 ---- */
+.voice-menu { position: relative; flex: none; }
+.voice-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  width: min(280px, calc(100vw - 32px)); padding: 12px 14px; display: grid; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+}
+.panel-title { margin: 0; font-weight: 600; font-size: 14px; }
+.field { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.field select { flex: 1; min-width: 0; }
+.field input[type="range"] { flex: 1; min-width: 0; }
+.field output { width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.voice-panel .secondary { justify-self: start; }
+.voice-panel p.small:empty { display: none; }
 
 /* ---- 添削結果 ---- */
 .ev { display: grid; gap: 14px; min-width: 0; }

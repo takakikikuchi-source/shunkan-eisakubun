@@ -74,29 +74,133 @@
   }
   for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => showTab(t.dataset.tab));
 
-  // ---- 読み上げ（ブラウザの機能） ----
-  const tts = 'speechSynthesis' in window;
-  let voice = null;
-  function pickVoice() {
-    if (!tts) return;
+  // ---- 読み上げ ----
+  // Claude の声（tts）が使える画面ではそれを使い、使えない画面（Safari・Claude アプリなど）はブラウザの声を使う。
+  const CLAUDE_VOICES = [['buttery', 'Claude の声 1（標準）'], ['airy', 'Claude の声 2'], ['glassy', 'Claude の声 3'], ['rounded', 'Claude の声 4']];
+  const browserTts = 'speechSynthesis' in window;
+  let ttsCap = null;          // Claude の声
+  let claudeVoiceOff = false; // 権限メニューで読み上げが切られた
+  const voiceSettings = Object.assign({ voice: 'buttery', rate: 1 }, local.get('coach.voice', {}));
+  let browserVoice = null;
+  let playingBtn = null;
+
+  function pickBrowserVoice() {
+    if (!browserTts) return;
     const vs = speechSynthesis.getVoices().filter((v) => /^en[-_]US/i.test(v.lang));
-    voice = vs.find((v) => /natural|online/i.test(v.name)) || vs.find((v) => /google/i.test(v.name)) || vs[0] || null;
+    browserVoice = vs.find((v) => /natural|online/i.test(v.name)) || vs.find((v) => /google/i.test(v.name)) || vs[0] || null;
   }
-  if (tts) { pickVoice(); speechSynthesis.addEventListener('voiceschanged', pickVoice); }
-  function speak(text) {
-    if (!tts || !text) return;
+  if (browserTts) { pickBrowserVoice(); speechSynthesis.addEventListener('voiceschanged', pickBrowserVoice); }
+
+  const useClaudeVoice = () => !!ttsCap && !claudeVoiceOff && voiceSettings.voice !== 'browser';
+
+  function setPlaying(btn) {
+    if (playingBtn) {
+      playingBtn.classList.remove('playing');
+      playingBtn.setAttribute('aria-label', '読み上げ');
+    }
+    playingBtn = btn || null;
+    if (playingBtn) {
+      playingBtn.classList.add('playing');
+      playingBtn.setAttribute('aria-label', '読み上げを止める');
+    }
+  }
+
+  function voiceNote(msg) { $('voice-note').textContent = msg || ''; }
+
+  function browserSpeak(text, btn) {
+    if (!browserTts) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-US';
-    if (voice) u.voice = voice;
+    if (browserVoice) u.voice = browserVoice;
+    u.rate = voiceSettings.rate;
+    u.onend = u.onerror = () => { if (playingBtn === btn) setPlaying(null); };
+    setPlaying(btn);
     speechSynthesis.speak(u);
   }
+
+  function stopSpeaking() {
+    if (ttsCap) ttsCap.stop().catch(() => {});
+    if (browserTts) speechSynthesis.cancel();
+    setPlaying(null);
+  }
+
+  function speak(text, btn) {
+    if (!text) return;
+    if (btn && btn === playingBtn) { stopSpeaking(); return; } // 読み上げ中にもう一度押すと止める
+    if (!useClaudeVoice()) { browserSpeak(text, btn); return; }
+    if (browserTts) speechSynthesis.cancel();
+    setPlaying(btn);
+    ttsCap.speak(text, { voice: voiceSettings.voice, rate: voiceSettings.rate, language: 'en' })
+      .then(() => { if (playingBtn === btn) setPlaying(null); })
+      .catch((e) => {
+        if (playingBtn === btn) setPlaying(null);
+        const code = e && e.code;
+        if (code === 'stopped' || code === 'no_gesture' || code === 'busy') return;
+        if (code === 'not_granted') {
+          // 本人が読み上げを切ったので、別の声でも読まない
+          claudeVoiceOff = true;
+          buildVoiceSelect();
+          voiceNote('Claude の声はオフになっています。ページの「権限」メニューで戻せます。ブラウザの声を選ぶこともできます。');
+          return;
+        }
+        // 上限・一時的な不調のときはブラウザの声で読む
+        voiceNote(code === 'rate_limited' ? 'Claude の声の上限に達したため、今回はブラウザの声で読みました。少し時間をおくと戻ります。' : 'Claude の声が使えなかったため、ブラウザの声で読みました。');
+        browserSpeak(text, btn);
+      });
+  }
+
+  function buildVoiceSelect() {
+    const sel = $('voice-select');
+    sel.textContent = '';
+    if (ttsCap && !claudeVoiceOff) {
+      for (const [id, label] of CLAUDE_VOICES) {
+        const o = el('option', '', label);
+        o.value = id;
+        sel.append(o);
+      }
+    }
+    if (browserTts) {
+      const o = el('option', '', 'ブラウザの声');
+      o.value = 'browser';
+      sel.append(o);
+    }
+    const ids = [...sel.options].map((o) => o.value);
+    sel.value = ids.includes(voiceSettings.voice) ? voiceSettings.voice : (ids[0] || '');
+    if (!ttsCap) voiceNote('この画面では Claude の声は使えません（Safari・Firefox・Claude のスマホアプリなど）。ブラウザの声で読みます。');
+  }
+  $('voice-select').addEventListener('change', (e) => {
+    voiceSettings.voice = e.target.value;
+    local.set('coach.voice', voiceSettings);
+  });
+  $('voice-rate').value = String(voiceSettings.rate);
+  $('voice-rate-out').textContent = Number(voiceSettings.rate).toFixed(1);
+  $('voice-rate').addEventListener('input', (e) => {
+    voiceSettings.rate = Number(e.target.value);
+    $('voice-rate-out').textContent = voiceSettings.rate.toFixed(1);
+    local.set('coach.voice', voiceSettings);
+  });
+  $('voice-test').addEventListener('click', () => speak('Could you please send us the revised quote by the end of this week?', $('voice-test')));
+  $('voice-toggle').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = $('voice-panel').hidden;
+    $('voice-panel').hidden = !open;
+    $('voice-toggle').setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('voice-panel').hidden && !e.target.closest('.voice-menu')) {
+      $('voice-panel').hidden = true;
+      $('voice-toggle').setAttribute('aria-expanded', 'false');
+    }
+  });
+  buildVoiceSelect();
+
   function speakButton(text) {
     const b = el('button', 'icon-btn');
     b.type = 'button';
-    b.title = '読み上げ';
+    b.title = '読み上げ（もう一度押すと止まります）';
     b.setAttribute('aria-label', '読み上げ');
-    b.hidden = !tts;
+    b.hidden = !browserTts && !ttsCap;
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -111,7 +215,7 @@
       svg.append(p);
     }
     b.append(svg);
-    b.addEventListener('click', () => speak(text));
+    b.addEventListener('click', () => speak(text, b));
     return b;
   }
 
@@ -683,14 +787,14 @@
       $('review-quiz').hidden = true;
       $('review-result').hidden = false;
       $('rv-result-text').textContent = rv.list.length + '問中 ' + rv.ok + '問正解';
-      if (tts) speechSynthesis.cancel();
+      stopSpeaking();
     } else {
       showReviewQuestion();
       window.scrollTo(0, 0);
     }
   });
   $('rv-quit').addEventListener('click', () => {
-    if (tts) speechSynthesis.cancel();
+    stopSpeaking();
     rv = null;
     $('review-quiz').hidden = true;
     $('review-home').hidden = false;
@@ -853,6 +957,15 @@
       $('btn-eval').disabled = true;
       return;
     }
+    // Claude の声は待たずに準備する（使えない画面では null のまま）
+    C.use('tts').then((t) => {
+      if (!t) return;
+      ttsCap = t;
+      try { t.onState(({ state }) => { if (state === 'idle' && playingBtn && !(browserTts && speechSynthesis.speaking)) setPlaying(null); }); } catch (e) { /* なくても動く */ }
+      buildVoiceSelect();
+      voiceNote('');
+      renderEval();
+    }).catch(() => {});
     const [s, db, user] = await Promise.all([C.use('sample'), C.use('db'), C.use('user')]);
     sample = s;
     if (!sample) {
