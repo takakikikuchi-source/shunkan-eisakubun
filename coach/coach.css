@@ -242,6 +242,7 @@ body.coach .icon-btn.playing { background: var(--accent); border-color: var(--ac
 /* もっと良くなるところ：誤りではないので、取り消し線を使わず穏やかに見せる */
 .chg.is-better .from { color: var(--muted); text-decoration: none; }
 .chg.is-better .to { color: var(--accent); }
+.chg.is-better .ok-mark { color: var(--ok); font-weight: 700; }
 
 .alt-list { display: grid; gap: 8px; }
 .alt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; }

@@ -503,7 +503,11 @@
       for (const c of items) {
         const item = el('div', 'chg ' + cls);
         const line = el('div', 'chg-line');
-        if (c.from) line.append(el('span', 'from', c.from));
+        if (c.from) {
+          const from = el('span', 'from', c.from);
+          if (cls === 'is-better') from.prepend(el('span', 'ok-mark', '○ '));
+          line.append(from);
+        }
         if (c.from && c.to) line.append(el('span', 'arrow', '→'));
         if (c.to) line.append(el('span', 'to', c.to));
         item.append(line);
@@ -517,7 +521,7 @@
     else se.append(el('p', 'muted small', '直す必要がある誤りはありません。'));
     root.append(se);
     if (betters.length) {
-      const sbt = section('もっと良くなるところ（' + betters.length + '）・点数には影響しません');
+      const sbt = section('正解だけど、もっと良くなる言い方（' + betters.length + '）');
       sbt.append(changeList(betters, 'is-better'));
       root.append(sbt);
     }
