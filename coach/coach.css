@@ -91,6 +91,19 @@ select {
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-height: 36px; max-width: 100%;
 }
 
+/* ②の段階切り替え */
+.seg {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+}
+body.coach .seg button {
+  min-height: 32px; padding: 4px 6px; border: none; border-radius: 7px;
+  background: transparent; color: var(--muted); font-size: 13px; white-space: nowrap;
+}
+body.coach .seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent); font-weight: 700; box-shadow: var(--shadow); }
+body.coach .seg button:disabled { opacity: .4; }
+.level-desc { margin: -4px 0 0; }
+
 .src-summary { display: grid; gap: 6px; }
 .clamp {
   margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;

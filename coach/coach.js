@@ -268,18 +268,30 @@
     return '場面: ' + (scene || '指定なし（文面から判断してください）') + '\n相手: ' + (audience || '指定なし（文面から判断してください）');
   }
 
+  // ②の言い換えの3段階
+  const LEVELS = [
+    { id: 'simple', label: '1 かんたん', name: 'すごく簡単に言う', desc: 'すごく簡単に言う言い方。中学英語で言える短い文にしています。' },
+    { id: 'standard', label: '2 言いやすく', name: '言いやすくする', desc: '書いた文章の内容はそのままに、英語にしやすく言い換えた言い方です。' },
+    { id: 'better', label: '3 より良く', name: 'もっと良くなる言い方', desc: 'こう言うともっと伝わる言い方。ビジネスの英文として好印象になるように整えています。' },
+  ];
+  const levelOf = (id) => LEVELS.find((l) => l.id === id) || LEVELS[1];
+
   function easyPrompt(src, scene, audience) {
     return [
       'あなたは日本人ビジネスパーソン向けの英作文コーチです。',
-      '学習者が書いた日本語を、英語に訳しやすい日本語に言い換えてください（和文和訳）。学習者はあなたの言い換えを見ながら、自分で英文を組み立てます。',
+      '学習者が書いた日本語を、英語に訳しやすい日本語に3段階で言い換えてください（和文和訳）。学習者は選んだ1つを見ながら、自分で英文を組み立てます。',
       '',
-      'ルール:',
+      '3段階:',
+      '- simple（すごく簡単に言う）: 中学英語で言えるように、要点だけを短い文に分ける。細かいニュアンスや敬語は削ってよいが、伝えたい要点は残す',
+      '- standard（言いやすくする）: 元の文の情報と意図をすべて残したまま、英語にしやすい形に整える',
+      '- better（もっと良くなる言い方）: 英語のビジネス文として、より伝わりやすく好印象になるように整える（結論を先に言う、理由や次の行動をはっきりさせる、相手への配慮の一言を加える など）。元の文にない内容を足すときは控えめにし、何を足したかを points に書く',
+      '',
+      '3段階に共通のルール:',
       '- 主語と目的語を補い、「誰が・何を・どうする」をはっきりさせる',
       '- 長い文は区切り、1文に1つのメッセージにする',
       '- 「よろしくお願いします」「お世話になっております」「検討します」「対応します」など英語に直訳しにくい表現は、英語で言える具体的な意味に置き換える',
       '- 敬語は簡潔にし、丁寧さは「丁寧にお願いする」のように意図として残す',
       '- 時制・数・期限・条件をはっきりさせる',
-      '- 元の文の意図や情報は変えない。足しすぎない',
       '- easyJa には英単語や英文を入れない（英語は keyPhrases にだけ書く）',
       '',
       contextLines(scene, audience),
@@ -289,8 +301,8 @@
       src,
       '"""',
       '',
-      '次の形の JSON だけを返してください:',
-      '{"easyJa": "言い換えた日本語", "points": ["どこをどう言い換えたか（短く、2〜5個）"], "keyPhrases": ["使えそうな英語の型（例: Could you 〜?）を2〜5個"], "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
+      '次の形の JSON だけを返してください（points はどこをどう言い換えたかを短く2〜4個、keyPhrases はその段階で使えそうな英語の型を2〜4個）:',
+      '{"levels": {"simple": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}, "standard": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}, "better": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."]}}, "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
     ].join('\n');
   }
 
@@ -300,7 +312,8 @@
       '説明はすべて日本語で、学習者が次に同じ間違いをしないように具体的に書いてください。',
       '',
       '元の日本語: ' + ctx.src,
-      '英語にしやすく言い換えた日本語: ' + ctx.easyJa,
+      '学習者が見た日本語（「' + levelOf(ctx.level).name + '」版の言い換え）: ' + ctx.easyJa,
+      '評価は、学習者が見た版の内容を英語で表せているかで行う。simple 版なら簡単な表現を使っていること自体は減点しない。best もその版の内容に合わせる',
       contextLines(ctx.scene, ctx.audience),
       ctx.sceneGuess ? '想定した場面: ' + ctx.sceneGuess : null,
       ctx.tone ? '想定した丁寧さ: ' + ctx.tone : null,
@@ -325,15 +338,32 @@
     ].filter((l) => l !== null).join('\n');
   }
 
-  function normEasy(r) {
-    if (!r || typeof r !== 'object' || !str(r.easyJa).trim()) throw { code: 'invalid_json' };
+  function normLevel(v) {
+    if (!v || typeof v !== 'object' || !str(v.easyJa).trim()) return null;
     return {
-      easyJa: str(r.easyJa).trim(),
-      points: arr(r.points).map(str).filter(Boolean),
-      keyPhrases: arr(r.keyPhrases).map(str).filter(Boolean),
-      sceneGuess: str(r.scene),
-      tone: str(r.tone),
+      easyJa: str(v.easyJa).trim(),
+      points: arr(v.points).map(str).filter(Boolean),
+      keyPhrases: arr(v.keyPhrases).map(str).filter(Boolean),
     };
+  }
+
+  function normEasy(r) {
+    if (!r || typeof r !== 'object') throw { code: 'invalid_json' };
+    const levels = {};
+    for (const l of LEVELS) {
+      const v = normLevel(r.levels && r.levels[l.id]);
+      if (v) levels[l.id] = v;
+    }
+    if (!Object.keys(levels).length) throw { code: 'invalid_json' };
+    return { levels, sceneGuess: str(r.scene), tone: str(r.tone) };
+  }
+
+  // 以前の形（段階なし）の言い換えを、3段階の形に直す
+  function upgradeEasy(e) {
+    if (!e) return null;
+    if (e.levels) return e;
+    const v = normLevel(e);
+    return v ? { levels: { standard: v }, sceneGuess: str(e.sceneGuess), tone: str(e.tone) } : null;
   }
 
   function normEval(r, mine) {
@@ -494,8 +524,39 @@
   // ---- 書く ----
   const draft = Object.assign({ src: '', scene: '', audience: '', easy: null, mine: '', ev: null, entryId: null, entry: null },
     local.get('coach.draft', {}));
+  draft.easy = upgradeEasy(draft.easy);
+  if (!draft.level) draft.level = local.get('coach.level', 'standard');
   const saveDraft = () => local.set('coach.draft', draft);
   let editingSrc = false;
+
+  // 選んでいる段階の言い換え（その段階がなければ、ある段階のうち最初のもの）
+  function curLevelId() {
+    const lv = draft.easy && draft.easy.levels;
+    if (!lv) return draft.level;
+    if (lv[draft.level]) return draft.level;
+    return (LEVELS.find((l) => lv[l.id]) || LEVELS[1]).id;
+  }
+  const curEasy = () => (draft.easy ? draft.easy.levels[curLevelId()] : null);
+
+  function buildLevelButtons() {
+    const seg = $('level-seg');
+    seg.textContent = '';
+    for (const l of LEVELS) {
+      const b = el('button', '', l.label);
+      b.type = 'button';
+      b.dataset.level = l.id;
+      b.title = l.desc;
+      b.addEventListener('click', () => {
+        draft.level = l.id;
+        local.set('coach.level', l.id);
+        saveDraft();
+        renderEasy();
+        growAll();
+      });
+      seg.append(b);
+    }
+  }
+  buildLevelButtons();
 
   function renderStep1() {
     const collapsed = !!draft.easy && !editingSrc;
@@ -512,11 +573,17 @@
   }
 
   function renderEasy() {
-    const e = draft.easy;
+    const e = curEasy();
     $('step2').hidden = !e;
     $('step3').hidden = !e;
-    $('step2').classList.toggle('done', !!e);
+    $('step2').classList.toggle('done', !!draft.easy);
     if (!e) return;
+    const id = curLevelId();
+    for (const b of $('level-seg').querySelectorAll('button')) {
+      b.setAttribute('aria-pressed', String(b.dataset.level === id));
+      b.disabled = !draft.easy.levels[b.dataset.level];
+    }
+    $('level-desc').textContent = levelOf(id).desc;
     $('easy').value = e.easyJa;
     const pts = $('easy-points');
     pts.textContent = '';
@@ -555,7 +622,7 @@
   $('scene').addEventListener('change', () => { draft.scene = $('scene').value; saveDraft(); });
   $('audience').addEventListener('change', () => { draft.audience = $('audience').value; saveDraft(); });
   $('mine').addEventListener('input', () => { draft.mine = $('mine').value; saveDraft(); });
-  $('easy').addEventListener('input', () => { if (draft.easy) { draft.easy.easyJa = $('easy').value; saveDraft(); } });
+  $('easy').addEventListener('input', () => { const e = curEasy(); if (e) { e.easyJa = $('easy').value; saveDraft(); } });
   $('edit-src').addEventListener('click', () => {
     editingSrc = true;
     renderStep1();
@@ -585,7 +652,9 @@
     const mine = $('mine').value.trim();
     if (!mine || !draft.easy) { $('mine').focus(); return; }
     const box = $('eval-status');
-    const ctx = { src: draft.src, easyJa: $('easy').value.trim() || draft.easy.easyJa, scene: draft.scene, audience: draft.audience,
+    const cur = curEasy();
+    const level = curLevelId();
+    const ctx = { src: draft.src, easyJa: $('easy').value.trim() || cur.easyJa, level, scene: draft.scene, audience: draft.audience,
       sceneGuess: draft.easy.sceneGuess, tone: draft.easy.tone };
     let ev;
     try {
@@ -606,8 +675,10 @@
     // 保存済みなら最新の保存内容（復習の記録を含む）を土台にする
     const saved = draft.entryId && entries.find((x) => x.id === draft.entryId);
     const base = saved ? clone(saved) : (draft.entry || { createdAt: Date.now(), review: { count: 0, correct: 0, lastAt: 0 } });
-    Object.assign(base, { src: ctx.src, scene: draft.scene, audience: draft.audience, easyJa: ctx.easyJa,
-      points: draft.easy.points, keyPhrases: draft.easy.keyPhrases, sceneGuess: draft.easy.sceneGuess, tone: draft.easy.tone });
+    // 復習では、添削したときに見ていた段階の言い換えを出題する
+    Object.assign(base, { src: ctx.src, scene: draft.scene, audience: draft.audience, easyJa: ctx.easyJa, level,
+      levels: clone(draft.easy.levels), points: cur.points, keyPhrases: cur.keyPhrases,
+      sceneGuess: draft.easy.sceneGuess, tone: draft.easy.tone });
     const entry = entryFromEval(base, ev, mine, 'write');
     status.textContent = '保存しています…';
     try {
@@ -750,7 +821,7 @@
     const box = $('rv-status');
     let ev;
     try {
-      ev = normEval(await ask(evalPrompt({ src: e.src, easyJa: e.easyJa, scene: e.scene, audience: e.audience, sceneGuess: e.sceneGuess, tone: e.tone }, c.text),
+      ev = normEval(await ask(evalPrompt({ src: e.src, easyJa: e.easyJa, level: e.level || 'standard', scene: e.scene, audience: e.audience, sceneGuess: e.sceneGuess, tone: e.tone }, c.text),
         box, '添削しています', $('rv-ask')), c.text);
     } catch (err) {
       showError(box, err);
@@ -857,7 +928,7 @@
     head.append(el('h3', '', meta), el('p', 'src', e.src));
     d.append(head);
 
-    const se = section('英語にしやすい日本語');
+    const se = section('英語にしやすい日本語（' + levelOf(e.level).label + '）');
     const easy = el('div', 'en-box');
     easy.append(el('p', '', e.easyJa));
     se.append(easy);
@@ -903,7 +974,10 @@
     again.addEventListener('click', () => {
       Object.assign(draft, {
         src: e.src, scene: e.scene || '', audience: e.audience || '',
-        easy: { easyJa: e.easyJa, points: arr(e.points), keyPhrases: arr(e.keyPhrases), sceneGuess: str(e.sceneGuess), tone: str(e.tone) },
+        easy: e.levels
+          ? { levels: clone(e.levels), sceneGuess: str(e.sceneGuess), tone: str(e.tone) }
+          : upgradeEasy({ easyJa: e.easyJa, points: arr(e.points), keyPhrases: arr(e.keyPhrases), sceneGuess: str(e.sceneGuess), tone: str(e.tone) }),
+        level: e.level || 'standard',
         mine: '', ev: null, entryId: e.id, entry: null,
       });
       saveDraft();
