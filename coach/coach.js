@@ -72,6 +72,7 @@
     for (const s of document.querySelectorAll('main > .screen')) s.hidden = s.id !== 'tab-' + name;
     window.scrollTo(0, 0);
     growAll();
+    if (name === 'review' && typeof renderReviewHome === 'function') renderReviewHome();
   }
   for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => showTab(t.dataset.tab));
 
@@ -234,7 +235,8 @@
   };
   const errText = (e) => ERR[e && e.code] || '通信に失敗しました。もう一度押してください。';
 
-  async function ask(prompt, statusBox, label, button) {
+  // opts.modelTier: 'quick'（速いモデル）／省略で標準のモデル
+  async function ask(prompt, statusBox, label, button, opts) {
     if (!sample) throw { code: 'unavailable' };
     const ctl = new AbortController();
     const text = statusBox.querySelector('.status-text');
@@ -249,7 +251,7 @@
     tick();
     const timer = setInterval(tick, 1000);
     try {
-      const res = await sample.json(prompt, { signal: ctl.signal });
+      const res = await sample.json(prompt, Object.assign({ signal: ctl.signal }, opts && opts.modelTier ? { modelTier: opts.modelTier } : {}));
       statusBox.hidden = true;
       return res;
     } finally {
@@ -579,8 +581,9 @@
   }
 
   function entryFromEval(base, ev, mine, from) {
-    const e = base ? clone(base) : { createdAt: Date.now(), review: { count: 0, correct: 0, lastAt: 0 } };
+    const e = base ? clone(base) : { createdAt: Date.now() };
     delete e.id;
+    if (!e.srs) e.srs = srsOf(e);
     e.updatedAt = Date.now();
     e.best = ev.best;
     e.corrected = ev.corrected;
@@ -805,7 +808,7 @@
     if (!src) { $('src').focus(); return; }
     const box = $('easy-status');
     try {
-      const r = normEasy(await ask(easyPrompt(src, draft.scene, draft.audience), box, '英語にしやすい日本語を考えています', $('btn-easy')));
+      const r = normEasy(await ask(easyPrompt(src, draft.scene, draft.audience), box, '英語にしやすい日本語を考えています', $('btn-easy'), { modelTier: 'quick' }));
       Object.assign(draft, { src, easy: r, mine: '', ev: null, entryId: null, entry: null });
       saveDraft();
       editingSrc = false;
@@ -845,7 +848,7 @@
     if (!entriesCol) { status.textContent = '保存されていません'; return; }
     // 保存済みなら最新の保存内容（復習の記録を含む）を土台にする
     const saved = draft.entryId && entries.find((x) => x.id === draft.entryId);
-    const base = saved ? clone(saved) : (draft.entry || { createdAt: Date.now(), review: { count: 0, correct: 0, lastAt: 0 } });
+    const base = saved ? clone(saved) : (draft.entry || { createdAt: Date.now(), srs: SESrs.initial(Date.now()) });
     // 復習では、添削したときに見ていた段階の言い換えを出題する
     Object.assign(base, { src: ctx.src, scene: draft.scene, audience: draft.audience, easyJa: ctx.easyJa, level,
       levels: clone(draft.easy.levels), points: cur.points, keyPhrases: cur.keyPhrases,
@@ -880,43 +883,336 @@
     $('src').focus();
   });
 
-  // ---- 復習 ----
-  let rv = null;
-
-  function renderReviewHome() {
-    const usable = entries.filter((e) => e.best);
-    const never = usable.filter((e) => !(e.review && e.review.count)).length;
-    $('review-summary').textContent = usable.length
-      ? '保存した文章 ' + usable.length + '件（まだ復習していない文章 ' + never + '件）。「英語にしやすい日本語」を見て、英文をタイピングで答えます。'
-      : 'まだ保存された文章はありません。「書く」で添削すると、ここで復習できるようになります。';
-    $('btn-review-old').disabled = !usable.length;
-    $('btn-review-random').disabled = !usable.length;
-    const badge = $('review-badge');
-    badge.hidden = !never;
-    badge.textContent = String(never);
+  // ---- 復習の状態（間隔反復：要件 R-03） ----
+  // 以前に保存した文で、まだ復習の状態がないものは「明日復習」から始める（要件 8章）。
+  // 「明日」はこの仕組みを入れた日（2026-11-28）の翌日＝11/29。
+  const SRS_RELEASE = new Date(2026, 10, 28).getTime();
+  function srsOf(e) {
+    if (e && e.srs) return e.srs;
+    const r = (e && e.review) || {};
+    const from = Math.max((e && e.createdAt) || Date.now(), SRS_RELEASE);
+    return Object.assign(SESrs.initial(from), { count: r.count || 0, correct: r.correct || 0 });
+  }
+  const fmtMD = (ms) => { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); };
+  function dueLabel(srs) {
+    const today = SESrs.dayStart(Date.now());
+    if (srs.due <= today) return '今日';
+    if (srs.due === SESrs.addDays(today, 1)) return '明日';
+    return fmtMD(srs.due);
   }
 
-  function startReview(mode) {
-    let list = entries.filter((e) => e.best);
-    if (!list.length) return;
-    if (mode === 'random') {
-      for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-    } else {
-      list = list.slice().sort((a, b) => ((a.review && a.review.lastAt) || 0) - ((b.review && b.review.lastAt) || 0) || a.createdAt - b.createdAt);
+  // ---- 問題集（要件 4.2） ----
+  const UNITS = window.SE_UNITS || [];
+  const QMAP = new Map();
+  for (const u of UNITS) for (const q of u.questions) QMAP.set(q.id, Object.assign({ category: u.category, unitTitle: u.title }, q));
+  let drillCol = null;
+  const drillState = new Map(); // 問題ID → 保存した記録 { qid, correct, wrong, lastResult, lastAt, userAlts, inReview, srs }
+  const ds = Object.assign({ order: 'random', count: 10, showHint: true, unitIds: UNITS[0] ? [UNITS[0].id] : [] }, local.get('coach.drill', {}));
+  ds.unitIds = arr(ds.unitIds).filter((id) => UNITS.some((u) => u.id === id));
+  const saveDs = () => local.set('coach.drill', ds);
+  const drillAnswers = (q) => [...new Set(q.en.concat(arr(q.alternatives), arr((drillState.get(q.id) || {}).userAlts)))];
+
+  async function saveDrill(qid, doc) {
+    drillState.set(qid, doc);
+    if (!drillCol) return;
+    try { await drillCol.doc(qid).set(doc); } catch (e) { /* 記録できなくても続行 */ }
+  }
+
+  function renderTokens(target, tokens, marks, cls) {
+    target.textContent = '';
+    if (!tokens.length) { target.append(el('span', 'muted', '（未回答）')); return; }
+    tokens.forEach((t, i) => {
+      if (i) target.append(' ');
+      target.append(el('span', marks[i] ? cls : '', t));
+    });
+  }
+  function renderTags(box, tags) {
+    box.textContent = '';
+    for (const t of arr(tags)) box.append(el('span', 'chip', t));
+    box.hidden = !arr(tags).length;
+  }
+
+  function drillCategories() {
+    const map = new Map();
+    for (const u of UNITS) {
+      const c = u.category || 'その他';
+      if (!map.has(c)) map.set(c, []);
+      map.get(c).push(u);
     }
-    rv = { list: list.slice(0, 10), i: 0, ok: 0, cur: null };
+    return map;
+  }
+  const drillSelected = () => [...document.querySelectorAll('input[name=unit]:checked')].map((b) => UNITS.find((u) => u.id === b.value)).filter(Boolean);
+
+  function updateDrillStart() {
+    const total = drillSelected().reduce((n, u) => n + u.questions.length, 0);
+    const per = Number($('count').value) || total;
+    $('start').disabled = !total;
+    $('start').textContent = total ? '始める（' + Math.min(per, total) + '問 / 選択中 ' + total + '問）' : 'ユニットを選んでください';
+  }
+  function onDrillUnitChange() {
+    ds.unitIds = drillSelected().map((u) => u.id);
+    saveDs();
+    updateDrillStart();
+  }
+
+  function renderDrillHome() {
+    const list = $('unit-list');
+    list.textContent = '';
+    for (const [cat, units] of drillCategories()) {
+      const group = el('div', 'cat');
+      const head = el('div', 'cat-head');
+      const all = el('button', 'link', 'まとめて選ぶ');
+      all.type = 'button';
+      all.addEventListener('click', () => {
+        const boxes = [...group.querySelectorAll('input[name=unit]')];
+        const on = !boxes.every((b) => b.checked);
+        boxes.forEach((b) => { b.checked = on; });
+        onDrillUnitChange();
+      });
+      head.append(el('h3', '', cat), all);
+      group.append(head);
+      for (const u of units) {
+        const label = el('label', 'unit');
+        const box = el('input');
+        box.type = 'checkbox';
+        box.name = 'unit';
+        box.value = u.id;
+        box.checked = ds.unitIds.includes(u.id);
+        box.addEventListener('change', onDrillUnitChange);
+        label.append(box, el('span', 'unit-title', u.title), el('span', 'count', u.questions.length + '問'));
+        group.append(label);
+      }
+      list.append(group);
+    }
+    for (const r of document.querySelectorAll('input[name=order]')) r.checked = r.value === ds.order;
+    $('count').value = String(ds.count);
+    $('show-hint').checked = ds.showHint;
+    updateDrillStart();
+  }
+  $('count').addEventListener('change', () => { ds.count = Number($('count').value); saveDs(); updateDrillStart(); });
+  $('show-hint').addEventListener('change', (e) => { ds.showHint = e.target.checked; saveDs(); });
+  for (const r of document.querySelectorAll('input[name=order]')) {
+    r.addEventListener('change', () => { ds.order = document.querySelector('input[name=order]:checked').value; saveDs(); });
+  }
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+
+  let dq = null; // 問題集の1回分
+
+  function showDrillScreen(name) {
+    $('drill-home').hidden = name !== 'home';
+    $('drill-quiz').hidden = name !== 'quiz';
+    $('drill-result').hidden = name !== 'result';
+    window.scrollTo(0, 0);
+  }
+
+  function startDrill(questions) {
+    dq = { questions, i: 0, records: [], startedAt: 0, cur: null };
+    showDrillScreen('quiz');
+    showDrillQuestion();
+  }
+  $('start').addEventListener('click', () => {
+    let qs = [];
+    for (const u of drillSelected()) qs = qs.concat(u.questions.map((q) => QMAP.get(q.id)));
+    if (!qs.length) return;
+    if (ds.order === 'random') shuffle(qs);
+    if (ds.count > 0) qs = qs.slice(0, ds.count);
+    startDrill(qs);
+  });
+
+  function showDrillQuestion() {
+    const q = dq.questions[dq.i];
+    $('progress').textContent = (dq.i + 1) + ' / ' + dq.questions.length;
+    $('bar-fill').style.width = (dq.i / dq.questions.length * 100) + '%';
+    $('quiz-unit').textContent = [q.category, q.unitTitle].filter(Boolean).join(' ｜ ');
+    $('ja').textContent = q.ja;
+    $('hint').hidden = !(ds.showHint && q.hint);
+    $('hint').textContent = q.hint ? 'ヒント: ' + q.hint : '';
+    const input = $('answer');
+    input.value = '';
+    input.readOnly = false;
+    $('answer-form').querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    $('feedback').hidden = true;
+    $('drill-empty').hidden = false;
+    dq.cur = null;
+    input.focus();
+    dq.startedAt = performance.now();
+  }
+
+  function submitDrill(giveUp) {
+    if (!dq || dq.cur) return;
+    const q = dq.questions[dq.i];
+    const text = giveUp ? '' : $('answer').value.trim();
+    if (!giveUp && !text) { $('answer').focus(); return; }
+    const now = Date.now();
+    const r = SEJudge.judge(text, drillAnswers(q));
+    // 記録：間違えた問題と「惜しい」は復習に入れる（すでに復習中なら、そのまま）
+    const prev = clone(drillState.get(q.id) || { qid: q.id, correct: 0, wrong: 0, userAlts: [], inReview: false, srs: null });
+    const d = clone(prev);
+    if (r.result === 'correct') d.correct = (d.correct || 0) + 1; else d.wrong = (d.wrong || 0) + 1;
+    d.lastResult = r.result;
+    d.lastAt = now;
+    if (r.result !== 'correct' && !d.inReview) { d.inReview = true; d.srs = SESrs.initial(now); }
+    saveDrill(q.id, d);
+    dq.cur = { q, input: text, result: r.result, answer: r.answer, timeMs: performance.now() - dq.startedAt, prev, saved: d };
+    dq.records.push(dq.cur);
+
+    $('answer').readOnly = true;
+    $('answer-form').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    const v = $('verdict');
+    v.textContent = { correct: '正解', close: '惜しい', wrong: '不正解' }[r.result];
+    v.className = 'verdict ' + r.result;
+    const showDiff = r.result !== 'correct';
+    renderTokens($('your'), r.userTokens, showDiff ? r.userMarks : [], 'bad');
+    renderTokens($('correct'), r.answerTokens, showDiff ? r.answerMarks : [], 'miss');
+    const slot = $('speak-slot');
+    slot.textContent = '';
+    slot.append(speakButton(r.answer));
+    const others = drillAnswers(q).filter((a) => a !== r.answer);
+    $('others').hidden = !others.length;
+    $('others').textContent = others.length ? 'ほかの正解: ' + others.join(' / ') : '';
+    renderTags($('tags'), q.grammarTags);
+    $('note').hidden = !q.note;
+    $('note').textContent = q.note || '';
+    $('accept').hidden = r.result === 'correct' || !text;
+    $('drill-empty').hidden = true;
+    $('feedback').hidden = false;
+    $('next').focus({ preventScroll: !narrow() });
+    if (narrow()) $('drill-feedback-block').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('answer-form').addEventListener('submit', (e) => { e.preventDefault(); submitDrill(false); });
+  $('giveup').addEventListener('click', () => submitDrill(true));
+
+  // これも正解：自分の答えを別解として保存し、この回答で復習に入れた分は取り消す
+  $('accept').addEventListener('click', () => {
+    const c = dq && dq.cur;
+    if (!c || !c.input || c.result === 'correct') return;
+    const d = clone(c.saved);
+    d.userAlts = [...new Set(arr(d.userAlts).concat(c.input))];
+    d.wrong = Math.max(0, (d.wrong || 0) - 1);
+    d.correct = (d.correct || 0) + 1;
+    d.lastResult = 'correct';
+    d.inReview = !!c.prev.inReview;
+    d.srs = c.prev.inReview ? c.prev.srs : null;
+    saveDrill(c.q.id, d);
+    c.saved = d;
+    c.result = 'correct';
+    const v = $('verdict');
+    v.textContent = '正解（自分で判定・別解に登録しました）';
+    v.className = 'verdict correct';
+    $('accept').hidden = true;
+    $('next').focus();
+  });
+
+  $('next').addEventListener('click', () => {
+    if (!dq || !dq.cur) return;
+    dq.i++;
+    if (dq.i >= dq.questions.length) showDrillResult();
+    else showDrillQuestion();
+  });
+  $('quit').addEventListener('click', () => {
+    stopSpeaking();
+    if (!dq || !dq.records.length) { showDrillScreen('home'); return; }
+    showDrillResult();
+  });
+
+  function showDrillResult() {
+    stopSpeaking();
+    const recs = dq.records;
+    const ok = recs.filter((r) => r.result === 'correct').length;
+    const answered = recs.filter((r) => r.input);
+    const avg = answered.length ? answered.reduce((n, r) => n + r.timeMs, 0) / answered.length / 1000 : 0;
+    $('r-rate').textContent = recs.length ? Math.round(ok / recs.length * 100) + '%' : '-';
+    $('r-count').textContent = ok + ' / ' + recs.length;
+    $('r-time').textContent = answered.length ? avg.toFixed(1) + '秒' : '-';
+    const misses = recs.filter((r) => r.result !== 'correct');
+    const ul = $('r-miss');
+    ul.textContent = '';
+    for (const m of misses) {
+      const li = el('li');
+      li.append(el('div', 'q', m.q.ja), el('div', 'a', 'あなた: ' + (m.input || '（未回答）')), el('div', 'c', '正解: ' + m.answer));
+      ul.append(li);
+    }
+    $('r-miss-title').textContent = misses.length ? '間違えた問題（' + misses.length + '問）：復習に入りました' : '全問正解です';
+    $('retry-miss').hidden = !misses.length;
+    dq.misses = misses.map((m) => m.q);
+    showDrillScreen('result');
+    renderReviewHome();
+  }
+  $('retry-miss').addEventListener('click', () => startDrill(dq.misses.slice()));
+  $('back-home').addEventListener('click', () => { showDrillScreen('home'); renderDrillHome(); });
+
+  // ---- 復習（要件 4.3：書いた文と問題集をまとめて、その日の分だけ） ----
+  let rv = null;
+
+  function reviewItems() {
+    const items = [];
+    for (const e of entries) {
+      if (!e.best) continue;
+      items.push({ kind: 'entry', id: e.id, e, srs: srsOf(e) });
+    }
+    for (const [qid, d] of drillState) {
+      const q = QMAP.get(qid);
+      if (q && d.inReview && d.srs) items.push({ kind: 'drill', id: qid, q, d, srs: d.srs });
+    }
+    return items;
+  }
+  function dueItems(now) {
+    return reviewItems().filter((x) => SESrs.isDue(x.srs, now)).sort((a, b) => a.srs.due - b.srs.due);
+  }
+
+  function renderReviewHome() {
+    const now = Date.now();
+    const all = reviewItems();
+    const due = all.filter((x) => SESrs.isDue(x.srs, now));
+    const nE = due.filter((x) => x.kind === 'entry').length;
+    const nD = due.length - nE;
+    const later = all.filter((x) => !SESrs.isDue(x.srs, now)).sort((a, b) => a.srs.due - b.srs.due)[0];
+    let msg;
+    if (due.length) msg = '今日の復習：' + due.length + '件（書いた文 ' + nE + '件・問題集 ' + nD + '件）。1回に10問ずつ出します。';
+    else if (later) msg = '今日の復習はありません。次の復習は ' + fmtMD(later.srs.due) + ' です。';
+    else msg = 'まだ復習する文はありません。「書く」で添削した文と、問題集で間違えた問題が、ここに入ります。';
+    $('review-summary').textContent = msg;
+    $('btn-review-start').disabled = !due.length;
+    $('btn-review-start').textContent = due.length ? '復習を始める（' + Math.min(10, due.length) + '問）' : '復習を始める';
+    const badge = $('review-badge');
+    badge.hidden = !due.length;
+    badge.textContent = String(due.length);
+  }
+
+  function startReview() {
+    const list = dueItems(Date.now()).slice(0, 10);
+    if (!list.length) return;
+    rv = { list, i: 0, ok: 0, cur: null };
     $('review-home').hidden = true;
     $('review-result').hidden = true;
     $('review-quiz').hidden = false;
     showReviewQuestion();
   }
+  $('btn-review-start').addEventListener('click', startReview);
+
+  const itemAnswers = (x) => (x.kind === 'entry' ? answersFor(x.e) : drillAnswers(x.q));
 
   function showReviewQuestion() {
-    const e = rv.list[rv.i];
+    const x = rv.list[rv.i];
     $('rv-progress').textContent = (rv.i + 1) + ' / ' + rv.list.length;
     $('rv-bar').style.width = (rv.i / rv.list.length * 100) + '%';
-    $('rv-easy').textContent = e.easyJa || e.src;
-    $('rv-src').textContent = e.src;
+    if (x.kind === 'entry') {
+      $('rv-kind').textContent = '書いた文' + (x.e.level ? ' ｜ ' + levelOf(x.e.level).label : '');
+      $('rv-easy').textContent = x.e.easyJa || x.e.src;
+      $('rv-src').textContent = x.e.src;
+      $('toggle-rv-src').hidden = false;
+      $('rv-hint').hidden = true;
+    } else {
+      $('rv-kind').textContent = '問題集 ｜ ' + [x.q.category, x.q.unitTitle].filter(Boolean).join(' ｜ ');
+      $('rv-easy').textContent = x.q.ja;
+      $('toggle-rv-src').hidden = true;
+      $('rv-hint').hidden = !(ds.showHint && x.q.hint);
+      $('rv-hint').textContent = x.q.hint ? 'ヒント: ' + x.q.hint : '';
+    }
     closeToggle($('toggle-rv-src'), $('rv-src'));
     const a = $('rv-answer');
     a.value = '';
@@ -931,23 +1227,33 @@
     a.focus();
   }
 
-  function renderTokens(target, tokens, marks, cls) {
-    target.textContent = '';
-    if (!tokens.length) { target.append(el('span', 'muted', '（未回答）')); return; }
-    tokens.forEach((t, i) => {
-      if (i) target.append(' ');
-      target.append(el('span', marks[i] ? cls : '', t));
-    });
+  async function writeReviewSrs(x, srs) {
+    if (x.kind === 'entry') {
+      if (!entriesCol) return;
+      try { await entriesCol.doc(x.id).update({ srs }); } catch (err) { /* 記録できなくても続行 */ }
+    } else {
+      const d = clone(drillState.get(x.id) || x.d);
+      d.srs = srs;
+      d.inReview = true;
+      d.lastResult = srs.lastResult;
+      d.lastAt = srs.lastAt;
+      await saveDrill(x.id, d);
+    }
   }
 
-  async function submitReview(giveUp) {
+  function submitReview(giveUp) {
     if (!rv || rv.cur) return;
-    const e = rv.list[rv.i];
+    const x = rv.list[rv.i];
     const text = giveUp ? '' : $('rv-answer').value.trim();
     if (!giveUp && !text) { $('rv-answer').focus(); return; }
-    const r = SEJudge.judge(text, answersFor(e));
-    rv.cur = { entry: e, text, result: r.result, answer: r.answer, claudeOk: false };
+    const now = Date.now();
+    const answers = itemAnswers(x);
+    const r = SEJudge.judge(text, answers);
+    const srs = SESrs.next(x.srs, r.result, now);
+    rv.cur = { x, text, result: r.result, answer: r.answer, claudeOk: false, prevSrs: x.srs, srs };
     if (r.result === 'correct') rv.ok++;
+    writeReviewSrs(x, srs);
+
     $('rv-answer').readOnly = true;
     $('rv-form').querySelectorAll('button').forEach((b) => { b.disabled = true; });
     const v = $('rv-verdict');
@@ -959,24 +1265,19 @@
     const slot = $('rv-speak-slot');
     slot.textContent = '';
     slot.append(speakButton(r.answer));
-    const others = answersFor(e).filter((a) => a !== r.answer);
+    const others = answers.filter((a) => a !== r.answer);
     $('rv-others').hidden = !others.length;
     $('rv-others').textContent = others.length ? 'ほかの正解: ' + others.join(' / ') : '';
-    $('rv-ask').hidden = !text || !sample;
+    $('rv-next-due').textContent = '次にこの文が出るのは：' + dueLabel(srs);
+    renderTags($('rv-tags'), x.kind === 'drill' ? x.q.grammarTags : []);
+    const note = x.kind === 'drill' ? x.q.note : '';
+    $('rv-note').hidden = !note;
+    $('rv-note').textContent = note || '';
+    $('rv-ask').hidden = x.kind !== 'entry' || !text || !sample;
     $('rv-empty').hidden = true;
     $('rv-feedback').hidden = false;
     $('rv-next').focus({ preventScroll: !narrow() });
     if (narrow()) $('rv-feedback-block').scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    if (entriesCol) {
-      const rev = Object.assign({ count: 0, correct: 0, lastAt: 0 }, e.review || {});
-      rev.count += 1;
-      if (r.result === 'correct') rev.correct += 1;
-      rev.lastAt = Date.now();
-      rev.lastResult = r.result;
-      rv.cur.rev = rev;
-      try { await entriesCol.doc(e.id).update({ review: rev }); } catch (err) { /* 記録できなくても続行 */ }
-    }
   }
 
   $('rv-form').addEventListener('submit', (ev) => { ev.preventDefault(); submitReview(false); });
@@ -985,10 +1286,11 @@
   });
   $('rv-giveup').addEventListener('click', () => submitReview(true));
 
+  // 書いた文だけ：Claude に添削してもらう（90点以上なら正解扱い）
   $('rv-ask').addEventListener('click', async () => {
     const c = rv && rv.cur;
-    if (!c || !c.text) return;
-    const e = c.entry;
+    if (!c || !c.text || c.x.kind !== 'entry') return;
+    const e = c.x.e;
     const box = $('rv-status');
     let ev;
     try {
@@ -1001,24 +1303,25 @@
     const view = $('rv-eval');
     view.textContent = '';
     view.append(buildEvalView(ev, c.text));
+    const patch = {
+      attempts: arr(e.attempts).concat([{ en: c.text, score: ev.score, at: Date.now(), from: 'review' }]).slice(-20),
+      bestScore: Math.max(Number(e.bestScore) || 0, ev.score),
+      lastEval: ev,
+      lastMine: c.text,
+      updatedAt: Date.now(),
+    };
     if (ev.score >= 90 && c.result !== 'correct' && !c.claudeOk) {
       c.claudeOk = true;
       rv.ok++;
+      c.srs = SESrs.next(c.prevSrs, 'correct', Date.now());
+      patch.srs = c.srs;
       const v = $('rv-verdict');
       v.textContent = '正解（Claude の判定 ' + ev.score + '点）';
       v.className = 'verdict correct';
+      $('rv-next-due').textContent = '次にこの文が出るのは：' + dueLabel(c.srs);
     }
     if (entriesCol) {
-      // お手本（best）は最初の添削のものを使い続け、挑戦の記録と点数だけ更新する
-      const patch = {
-        attempts: arr(e.attempts).concat([{ en: c.text, score: ev.score, at: Date.now(), from: 'review' }]).slice(-20),
-        bestScore: Math.max(Number(e.bestScore) || 0, ev.score),
-        lastEval: ev,
-        lastMine: c.text,
-        updatedAt: Date.now(),
-      };
-      if (c.claudeOk && c.rev) { c.rev.correct += 1; patch.review = c.rev; }
-      try { await entriesCol.doc(e.id).update(patch); } catch (err) { /* 記録できなくても続行 */ }
+      try { await entriesCol.doc(c.x.id).update(patch); } catch (err) { /* 記録できなくても続行 */ }
     }
   });
 
@@ -1030,6 +1333,7 @@
       $('review-result').hidden = false;
       $('rv-result-text').textContent = rv.list.length + '問中 ' + rv.ok + '問正解';
       stopSpeaking();
+      renderReviewHome();
     } else {
       showReviewQuestion();
       window.scrollTo(0, 0);
@@ -1040,13 +1344,13 @@
     rv = null;
     $('review-quiz').hidden = true;
     $('review-home').hidden = false;
+    renderReviewHome();
   });
   $('rv-back').addEventListener('click', () => {
     $('review-result').hidden = true;
     $('review-home').hidden = false;
+    renderReviewHome();
   });
-  $('btn-review-old').addEventListener('click', () => startReview('old'));
-  $('btn-review-random').addEventListener('click', () => startReview('random'));
 
   // ---- 履歴（一覧と詳細） ----
   let selectedId = null;
@@ -1067,7 +1371,8 @@
       b.type = 'button';
       if (e.id === selectedId) b.setAttribute('aria-current', 'true');
       b.append(el('span', 'h-src', str(e.src).split('\n')[0]), el('span', 'h-score ' + scoreClass(e.bestScore || 0), (e.bestScore || 0) + '点'));
-      const meta = [fmtDate(e.createdAt), e.scene || e.sceneGuess, e.review && e.review.count ? '復習 ' + e.review.correct + '/' + e.review.count : '未復習'].filter(Boolean).join(' ・ ');
+      const sr = srsOf(e);
+      const meta = [fmtDate(e.createdAt), e.scene || e.sceneGuess, '次の復習 ' + dueLabel(sr), sr.count ? '復習 ' + sr.correct + '/' + sr.count : ''].filter(Boolean).join(' ・ ');
       b.append(el('span', 'h-meta', meta));
       b.addEventListener('click', () => {
         selectedId = e.id;
@@ -1094,8 +1399,9 @@
     }
     const d = el('div', 'detail');
     const head = el('div', 'ev-sec');
+    const sr = srsOf(e);
     const meta = [fmtDate(e.createdAt), e.scene || e.sceneGuess, e.audience, '最高 ' + (e.bestScore || 0) + '点',
-      e.review && e.review.count ? '復習 ' + e.review.correct + '/' + e.review.count + ' 正解' : '未復習'].filter(Boolean).join(' ・ ');
+      '次の復習 ' + dueLabel(sr), sr.count ? '復習 ' + sr.correct + '/' + sr.count + ' 正解' : '未復習'].filter(Boolean).join(' ・ ');
     head.append(el('h3', '', meta), el('p', 'src', e.src));
     d.append(head);
 
@@ -1191,6 +1497,7 @@
 
   // ---- 起動 ----
   renderWrite();
+  renderDrillHome();
   renderReviewHome();
   renderHistory();
 
@@ -1223,6 +1530,7 @@
     if (db && uid) {
       try {
         entriesCol = db.doc('data/users/' + uid + '/notebook').collection('entries');
+        drillCol = db.doc('data/users/' + uid + '/notebook').collection('drill');
       } catch (e) {
         entriesCol = null;
       }
@@ -1236,6 +1544,12 @@
       empty.hidden = false;
       empty.textContent = '保存した文章を読み込めていません。通信状況を確認してください。';
     }, 10000);
+    // 問題集の記録（別解・復習の状態）
+    drillCol.limit(1000).onSnapshot((snap) => {
+      drillState.clear();
+      for (const d of snap.docs) drillState.set(d.id, d.data());
+      renderReviewHome();
+    }, () => { /* 読めなくても問題集は解ける */ });
     entriesCol.orderBy('createdAt', 'desc').limit(1000).onSnapshot((snap) => {
       if (!snap.metadata.fromCache) clearTimeout(loadingTimer);
       entries = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));

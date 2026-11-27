@@ -13,6 +13,7 @@
       <h1>英作文コーチ</h1>
       <nav class="tabs" aria-label="画面の切り替え">
         <button type="button" class="tab" data-tab="write" aria-current="page">書く</button>
+        <button type="button" class="tab" data-tab="drill">問題集</button>
         <button type="button" class="tab" data-tab="review">復習<span id="review-badge" class="badge" hidden></span></button>
         <button type="button" class="tab" data-tab="history">履歴</button>
       </nav>
@@ -151,15 +152,103 @@
       </div>
     </section>
 
+    <!-- 問題集（GitHub Pages 版から統合）：PCは左に問題、右に判定 -->
+    <section id="tab-drill" class="screen" hidden>
+      <div id="drill-home" class="split">
+        <div class="pane pane-left">
+          <div class="block">
+            <div class="block-head"><h2>問題集</h2><span class="muted small head-action">複数選ぶと混ぜて出題</span></div>
+            <div id="unit-list" class="unit-list"></div>
+          </div>
+        </div>
+        <div class="pane pane-right">
+          <div class="block">
+            <div class="block-head"><h2>出題のしかた</h2></div>
+            <div class="toolbar">
+              <label class="field"><input type="radio" name="order" value="random" checked> ランダム</label>
+              <label class="field"><input type="radio" name="order" value="seq"> 順番通り</label>
+              <label class="field">問題数
+                <select id="count">
+                  <option value="10">10問</option>
+                  <option value="20">20問</option>
+                  <option value="0">すべて</option>
+                </select>
+              </label>
+            </div>
+            <label class="field"><input type="checkbox" id="show-hint" checked> ヒント（使う表現）を表示</label>
+            <p class="muted small">間違えた問題と「惜しい」だった問題は、復習に入ります。判定は端末の中で行うので、Claude の使用量は使いません。</p>
+            <div class="toolbar"><button type="button" id="start" class="primary">始める</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="drill-quiz" class="split" hidden>
+        <div class="pane pane-left">
+          <div class="block">
+            <div class="quiz-head">
+              <span id="progress" class="muted small"></span>
+              <button type="button" id="quit" class="link">やめる</button>
+            </div>
+            <div class="bar"><div id="bar-fill"></div></div>
+            <p id="quiz-unit" class="muted small"></p>
+            <p id="ja" class="q-text"></p>
+            <p id="hint" class="hint" hidden></p>
+            <form id="answer-form" class="stack" autocomplete="off">
+              <input id="answer" type="text" class="en-line-input" inputmode="text" enterkeyhint="done"
+                     autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="英語で入力して Enter">
+              <div class="toolbar">
+                <button type="button" id="giveup" class="secondary push">わからない</button>
+                <button type="submit" class="primary">判定</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="pane pane-right">
+          <div class="block result-block" id="drill-feedback-block">
+            <div id="drill-empty" class="empty-state"><p>判定すると、ここに正解との違いが出ます。</p></div>
+            <div id="feedback" hidden>
+              <div class="verdict-row"><span id="verdict" class="verdict"></span></div>
+              <dl class="compare">
+                <dt>あなた</dt><dd id="your" class="en"></dd>
+                <dt>正解</dt><dd><span id="correct" class="en"></span> <span id="speak-slot"></span></dd>
+              </dl>
+              <p id="others" class="muted small" hidden></p>
+              <div id="tags" class="chips" hidden></div>
+              <p id="note" class="note" hidden></p>
+              <div class="toolbar">
+                <button type="button" id="accept" class="secondary">これも正解</button>
+                <button type="button" id="next" class="primary push">次へ</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="drill-result" class="block narrow" hidden>
+        <div class="block-head"><h2>結果</h2></div>
+        <div class="stats">
+          <div class="stat"><span class="num" id="r-rate"></span><span class="cap">正答率</span></div>
+          <div class="stat"><span class="num" id="r-count"></span><span class="cap">正解数</span></div>
+          <div class="stat"><span class="num" id="r-time"></span><span class="cap">平均回答時間</span></div>
+        </div>
+        <p id="r-miss-title" class="ev-sec-title"></p>
+        <ul id="r-miss" class="miss-list"></ul>
+        <div class="toolbar">
+          <button type="button" id="retry-miss" class="primary">間違えた問題だけもう一度</button>
+          <button type="button" id="back-home" class="secondary">ユニット選択に戻る</button>
+        </div>
+      </div>
+    </section>
+
     <!-- 復習 -->
     <section id="tab-review" class="screen" hidden>
       <div id="review-home" class="block narrow">
         <div class="block-head"><h2>復習</h2></div>
         <p id="review-summary" class="muted"></p>
         <div class="toolbar">
-          <button type="button" id="btn-review-old" class="primary">まだ復習していない順に10問</button>
-          <button type="button" id="btn-review-random" class="secondary">ランダムに10問</button>
+          <button type="button" id="btn-review-start" class="primary">復習を始める</button>
         </div>
+        <p class="muted small">正解するたびに、次に出る日が 1日後 → 3日後 → 7日後 → 14日後 → 30日後 と延びます（以降は30日ごと）。惜しいときは同じ間隔でもう一度、不正解のときは翌日に出ます。</p>
       </div>
 
       <div id="review-quiz" class="split" hidden>
@@ -170,7 +259,9 @@
               <button type="button" id="rv-quit" class="link">やめる</button>
             </div>
             <div class="bar"><div id="rv-bar"></div></div>
+            <p id="rv-kind" class="muted small"></p>
             <p id="rv-easy" class="q-text"></p>
+            <p id="rv-hint" class="hint" hidden></p>
             <button type="button" class="chip-btn" id="toggle-rv-src" aria-expanded="false">元の文章</button>
             <p id="rv-src" class="muted small" hidden></p>
             <form id="rv-form" class="stack" autocomplete="off">
@@ -195,6 +286,9 @@
                 <dt>お手本</dt><dd><span id="rv-correct" class="en"></span> <span id="rv-speak-slot"></span></dd>
               </dl>
               <p id="rv-others" class="muted small" hidden></p>
+              <p id="rv-next-due" class="muted small"></p>
+              <div id="rv-tags" class="chips" hidden></div>
+              <p id="rv-note" class="note" hidden></p>
               <div class="toolbar">
                 <button type="button" id="rv-ask" class="secondary">Claudeに添削してもらう</button>
                 <button type="button" id="rv-next" class="primary push">次へ</button>
@@ -235,6 +329,11 @@
   </main>
 
   <script src="../js/judge.js"></script>
+  <script src="../js/srs.js"></script>
+  <script src="../data/biz-mail.js"></script>
+  <script src="../data/biz-meeting.js"></script>
+  <script src="../data/biz-negotiation.js"></script>
+  <script src="../data/stage1-be.js"></script>
   <script src="examples.js"></script>
   <script src="coach.js"></script>
 </body>
