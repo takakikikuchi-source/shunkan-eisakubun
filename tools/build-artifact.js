@@ -1,11 +1,14 @@
-// claude.ai の非公開ページ用に、index.html と CSS・JS を1ファイルにまとめる
-// 使い方: node tools/build-artifact.js  →  dist/shunkan-eisakubun.html
+// claude.ai の非公開ページ用に、HTML と CSS・JS を1ファイルにまとめる
+// 使い方: node tools/build-artifact.js [入力HTML（既定: coach/index.html）]
+//   → dist/shunkan-eisakubun.html（このファイルを Claude に同じ URL へ公開し直してもらう）
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
-const html = read('index.html');
+const input = path.join(root, process.argv[2] || 'coach/index.html');
+const dir = path.dirname(input);
+const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
+const html = fs.readFileSync(input, 'utf8');
 
 const title = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '瞬間英作文';
 const css = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => read(m[1])).join('\n');
@@ -22,4 +25,4 @@ ${body.trim()}
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'shunkan-eisakubun.html'), out);
-console.log('dist/shunkan-eisakubun.html', out.length, 'bytes');
+console.log(path.relative(root, input), '→ dist/shunkan-eisakubun.html', out.length, 'bytes');

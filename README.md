@@ -18,11 +18,12 @@ https://takakikikuchi-source.github.io/shunkan-eisakubun/
 - 英文を入力して **Enter** で判定、もう一度 **Enter** で次の問題へ
 - 判定が厳しすぎるときは「これも正解」で、自分の答えを別解として登録できる（このブラウザ内に保存）
 
-## 非公開ページ（claude.ai）
+## 英作文コーチ（claude.ai の非公開ページ）
 
 https://claude.ai/artifact/U215EKywUtD9yfo1jsQ2w9 （自分のアカウントでログインしたときだけ開ける。スマホからも使える）
 
-更新するときは `node tools/build-artifact.js` で `dist/shunkan-eisakubun.html` を作り直し、Claude に同じファイルを公開し直してもらう（URL はそのまま）。
+書きたい日本語 → 英語にしやすい日本語（Claude）→ 自分で英文 → 添削（Claude）→ 保存して復習。Claude の使用量で動く。
+ソースは `coach/`。更新するときは `node tools/build-artifact.js` で `dist/shunkan-eisakubun.html` を作り直し、Claude に同じファイルを公開し直してもらう（URL はそのまま。capabilities は sample / db / user）。
 
 ## 構成
 
@@ -32,3 +33,5 @@ https://claude.ai/artifact/U215EKywUtD9yfo1jsQ2w9 （自分のアカウントで
 | `js/judge.js` | 判定ロジック（短縮形・句読点・別解の扱い、差分表示） |
 | `data/*.js` | 問題データ（ユニットごとに1ファイル） |
 | `tests/` | 判定ロジックと問題データのテスト（`npm test`） |
+| `coach/` | 英作文コーチ（claude.ai の非公開ページ用） |
+| `tools/build-artifact.js` | 非公開ページ用に1ファイルにまとめる |
