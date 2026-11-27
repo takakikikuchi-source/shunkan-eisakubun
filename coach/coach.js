@@ -295,6 +295,11 @@
       '- 時制・数・期限・条件をはっきりさせる',
       '- easyJa には英単語や英文を入れない（英語は keyPhrases・wordHints・skeleton にだけ書く）',
       '',
+      'simple の英語（skeleton・wordHints・keyPhrases）で使う単語:',
+      '- 中学1〜2年で習う基本の単語だけを使う。acquisition, implement, optimize, allocate, facilitate, approximately のような難しい単語は使わず、get, use, make better, give, help, about のような簡単な単語で言い換える',
+      '- 広告の仕事でそのまま使う言葉など、どうしても言い換えられない単語（例: conversion, impression）だけは使ってよい。その場合は必ず glossary に、英単語 en・日本語の意味 ja・言い換えずに使う理由 why を書く',
+      '- 難しい単語を使わないなら glossary は空の配列にする',
+      '',
       'ヒントの作り方:',
       '- wordHints（3段階それぞれ）: その段階の easyJa の中で、英語にするとき単語が思い浮かびにくそうな言葉を3〜6個選び、英語の候補を1〜3個ずつ挙げる。中学英語で言える簡単な候補を先に書く（例: 延期する → move, push back, postpone）',
       '- skeleton（simple だけ）: simple の easyJa を1文ずつ、英語の語順で「部品」に分けた骨組み。部品の role は「誰が」「する」「何を」「誰に」「どこで」「いつ」「なぜ」「どのように」から選び、en は短い英語のかたまりにする（例: 誰が We → する decided → 何を to start a trial → いつ next month）。部品をつなげるとそのまま正しい英文になるようにし、簡単な単語を使う',
@@ -307,7 +312,7 @@
       '"""',
       '',
       '次の形の JSON だけを返してください（points はどこをどう言い換えたかを短く2〜4個、keyPhrases はその段階で使えそうな英語の型を2〜4個）:',
-      '{"levels": {"simple": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "延期する", "en": ["move", "push back"]}], "skeleton": [{"ja": "この文の日本語", "parts": [{"role": "誰が", "en": "We"}, {"role": "する", "en": "decided"}]}]}, "standard": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}, "better": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}}, "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
+      '{"levels": {"simple": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "延期する", "en": ["move", "push back"]}], "skeleton": [{"ja": "この文の日本語", "parts": [{"role": "誰が", "en": "We"}, {"role": "する", "en": "decided"}]}], "glossary": [{"en": "conversion", "ja": "コンバージョン。広告を見た人が購入や申し込みをすること", "why": "広告の仕事でそのまま使う言葉のため"}]}, "standard": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}, "better": {"easyJa": "...", "points": ["..."], "keyPhrases": ["..."], "wordHints": [{"ja": "...", "en": ["..."]}]}}, "scene": "想定した場面（短く）", "tone": "想定した丁寧さ（丁寧 / 普通 / カジュアル など）"}',
     ].join('\n');
   }
 
@@ -319,6 +324,9 @@
       '元の日本語: ' + ctx.src,
       '学習者が見た日本語（「' + levelOf(ctx.level).name + '」版の言い換え）: ' + ctx.easyJa,
       '評価は、学習者が見た版の内容を英語で表せているかで行う。simple 版なら簡単な表現を使っていること自体は減点しない。best もその版の内容に合わせる',
+      ctx.level === 'simple'
+        ? 'simple 版なので、corrected と best は中学1〜2年で習う基本の単語だけで書く（acquisition や implement のような難しい単語は使わない）。広告の仕事でそのまま使う言葉など、どうしても必要な単語を corrected・best・natural で使ったときは、glossary に英単語 en・日本語の意味 ja・言い換えずに使う理由 why を書く'
+        : null,
       contextLines(ctx.scene, ctx.audience),
       ctx.sceneGuess ? '想定した場面: ' + ctx.sceneGuess : null,
       ctx.tone ? '想定した丁寧さ: ' + ctx.tone : null,
@@ -339,7 +347,7 @@
       '- best: 復習用のお手本を1つ（アメリカ英語で、この場面で一番おすすめの言い方）',
       '',
       '次の形の JSON だけを返してください:',
-      '{"score": 0, "breakdown": {"accuracy": 0, "naturalness": 0, "tone": 0}, "summary": "ひとことの講評", "corrected": "...", "changes": [{"from": "...", "to": "...", "reason": "..."}], "good": ["..."], "natural": [{"en": "...", "nuance": "..."}], "tone": {"label": "適切", "comment": "..."}, "best": "..."}',
+      '{"score": 0, "breakdown": {"accuracy": 0, "naturalness": 0, "tone": 0}, "summary": "ひとことの講評", "corrected": "...", "changes": [{"from": "...", "to": "...", "reason": "..."}], "good": ["..."], "natural": [{"en": "...", "nuance": "..."}], "tone": {"label": "適切", "comment": "..."}, "best": "...", "glossary": []}',
     ].filter((l) => l !== null).join('\n');
   }
 
@@ -355,7 +363,32 @@
       skeleton: arr(v.skeleton)
         .map((s) => ({ ja: str(s && s.ja), parts: arr(s && s.parts).map((p) => ({ role: str(p && p.role), en: str(p && p.en) })).filter((p) => p.en) }))
         .filter((s) => s.parts.length),
+      glossary: normGlossary(v.glossary),
     };
+  }
+
+  // 難しいけれど必要な単語の注釈
+  function normGlossary(g) {
+    return arr(g).map((x) => ({ en: str(x && x.en).trim(), ja: str(x && x.ja), why: str(x && x.why) })).filter((x) => x.en && x.ja);
+  }
+  function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // text の中に注釈つきの単語があれば、その単語を返す
+  function notedWords(text, glossary) {
+    const t = str(text);
+    return arr(glossary).filter((g) => new RegExp('\\b' + escapeRe(g.en) + '\\w*', 'i').test(t));
+  }
+  function glossaryList(glossary, title) {
+    const box = el('div', 'glossary');
+    box.append(el('p', 'glossary-title', title || '※ 注釈（難しいけれど必要な単語）'));
+    const dl = el('dl');
+    for (const g of glossary) {
+      dl.append(el('dt', '', '※ ' + g.en));
+      const dd = el('dd', '', g.ja);
+      if (g.why) dd.append(el('span', 'why', '（' + g.why + '）'));
+      dl.append(dd);
+    }
+    box.append(dl);
+    return box;
   }
 
   function normEasy(r) {
@@ -395,6 +428,7 @@
       natural: arr(r.natural).map((n) => ({ en: str(n && n.en), nuance: str(n && n.nuance) })).filter((n) => n.en),
       tone: { label: str(r.tone && r.tone.label) || '—', comment: str(r.tone && r.tone.comment) },
       best: str(r.best).trim() || corrected,
+      glossary: normGlossary(r.glossary),
     };
   }
 
@@ -410,6 +444,7 @@
     } else {
       p.textContent = text;
     }
+    if (opts && opts.glossary && notedWords(text, opts.glossary).length) p.append(el('sup', 'note-mark', '※'));
     box.append(p, speakButton(text));
     return box;
   }
@@ -452,7 +487,7 @@
     const d = window.SEJudge ? SEJudge.diff(mine, ev.corrected) : null;
     const same = d && !d.answerMarks.some(Boolean) && !d.userMarks.some(Boolean);
     const sc = section(same ? '直した英文（直すところはありませんでした）' : '直した英文（印が直したところ）');
-    sc.append(enBox(ev.corrected, { marks: d && d.answerMarks }));
+    sc.append(enBox(ev.corrected, { marks: d && d.answerMarks, glossary: ev.glossary }));
     root.append(sc);
 
     // 理由
@@ -479,7 +514,9 @@
       const list = el('div', 'alt-list');
       for (const n of ev.natural) {
         const a = el('div', 'alt');
-        a.append(el('span', 'en', n.en), speakButton(n.en));
+        const enSpan = el('span', 'en', n.en);
+        if (notedWords(n.en, ev.glossary).length) enSpan.append(el('sup', 'note-mark', '※'));
+        a.append(enSpan, speakButton(n.en));
         if (n.nuance) a.append(el('span', 'nuance', n.nuance));
         list.append(a);
       }
@@ -489,8 +526,11 @@
 
     // お手本
     const sb = section('お手本（復習で使います）');
-    sb.append(enBox(ev.best, { model: true }));
+    sb.append(enBox(ev.best, { model: true, glossary: ev.glossary }));
     root.append(sb);
+
+    // 難しいけれど必要な単語の注釈
+    if (arr(ev.glossary).length) root.append(glossaryList(ev.glossary));
 
     // 良かったところ
     if (ev.good.length) {
@@ -610,7 +650,17 @@
     const words = arr(e.wordHints);
     const dl = $('words');
     dl.textContent = '';
-    for (const w of words) dl.append(el('dt', '', w.ja), el('dd', '', w.en.join(' / ')));
+    // かんたんのときは、注釈つきの単語に ※ を付ける
+    const glossary = id === 'simple' ? arr(e.glossary) : [];
+    for (const w of words) {
+      const dd = el('dd');
+      w.en.forEach((t, i) => {
+        if (i) dd.append(' / ');
+        dd.append(t);
+        if (notedWords(t, glossary).length) dd.append(el('sup', 'note-mark', '※'));
+      });
+      dl.append(el('dt', '', w.ja), dd);
+    }
     $('words-count').textContent = words.length ? '（' + words.length + '）' : '';
     $('toggle-words').hidden = !words.length;
     if (!words.length) closeToggle($('toggle-words'), dl);
@@ -620,13 +670,19 @@
     if (key !== skKey) { skKey = key; skOpen.clear(); }
     const sk = id === 'simple' ? arr(e.skeleton) : [];
     $('skeleton').hidden = !sk.length;
-    renderSkeleton(sk);
+    renderSkeleton(sk, glossary);
+
+    // 難しいけれど必要な単語の注釈（かんたんのとき）
+    const gb = $('glossary-box');
+    gb.textContent = '';
+    gb.hidden = !glossary.length;
+    if (glossary.length) gb.append(glossaryList(glossary));
   }
 
   // 骨組みヒント：部品を押すと英語が見える。「次を見る」で英語の順に1つずつ、「全部見る」でまとめて
   const skOpen = new Set();
   let skKey = '';
-  function renderSkeleton(sk) {
+  function renderSkeleton(sk, glossary) {
     const body = $('skeleton-body');
     body.textContent = '';
     sk.forEach((s, i) => {
@@ -639,11 +695,14 @@
         const open = skOpen.has(k);
         const b = el('button', 'sk-part' + (open ? ' open' : ''));
         b.type = 'button';
-        b.append(el('span', 'role', p.role || '？'), el('span', 'val', open ? p.en : '？'));
+        const val = el('span', 'val', open ? p.en : '？');
+        // 注釈つきの単語は、隠れていても ※ で「難しい単語が入る」と分かるようにする
+        if (notedWords(p.en, glossary).length) val.append(el('sup', 'note-mark', '※'));
+        b.append(el('span', 'role', p.role || '？'), val);
         b.setAttribute('aria-label', (p.role || '部品') + '：' + (open ? p.en : '押すと英語が見えます'));
         b.addEventListener('click', () => {
           if (skOpen.has(k)) skOpen.delete(k); else skOpen.add(k);
-          renderSkeleton(sk);
+          renderSkeleton(sk, glossary);
         });
         parts.append(b);
       });
@@ -655,10 +714,10 @@
     const rest = all.filter((k) => !skOpen.has(k));
     $('sk-next').disabled = !rest.length;
     $('sk-all').textContent = rest.length ? '全部見る' : '隠す';
-    $('sk-next').onclick = () => { if (rest.length) { skOpen.add(rest[0]); renderSkeleton(sk); } };
+    $('sk-next').onclick = () => { if (rest.length) { skOpen.add(rest[0]); renderSkeleton(sk, glossary); } };
     $('sk-all').onclick = () => {
       if (rest.length) all.forEach((k) => skOpen.add(k)); else skOpen.clear();
-      renderSkeleton(sk);
+      renderSkeleton(sk, glossary);
     };
   }
 

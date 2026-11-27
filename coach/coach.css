@@ -125,6 +125,18 @@ body.coach .sk-part {
 body.coach .sk-part.open { background: var(--tint); border-color: var(--tint-strong); color: var(--text); }
 .sk-part.open .val { font-size: 15px; letter-spacing: 0; color: var(--accent); }
 
+/* ※ 注釈（難しいけれど必要な単語） */
+.note-mark { margin-left: 2px; font-size: 10px; font-weight: 700; color: var(--close); }
+.glossary {
+  display: grid; gap: 6px; padding: 8px 12px; border-radius: 8px;
+  background: var(--close-bg); font-size: 14px;
+}
+.glossary-title { margin: 0; font-size: 12px; font-weight: 700; color: var(--close); }
+.glossary dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.glossary dt { font-weight: 700; color: var(--text); }
+.glossary dd { margin: 0; overflow-wrap: anywhere; }
+.glossary .why { display: block; font-size: 12px; color: var(--muted); }
+
 /* 単語ヒント */
 .words { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
 .words dt { color: var(--text); }
