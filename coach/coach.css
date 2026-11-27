@@ -239,6 +239,9 @@ body.coach .icon-btn.playing { background: var(--accent); border-color: var(--ac
 .chg .arrow { color: var(--muted); }
 .chg .to { color: var(--ok); font-weight: 600; }
 .chg .why { margin: 0; font-size: 14px; }
+/* もっと良くなるところ：誤りではないので、取り消し線を使わず穏やかに見せる */
+.chg.is-better .from { color: var(--muted); text-decoration: none; }
+.chg.is-better .to { color: var(--accent); }
 
 .alt-list { display: grid; gap: 8px; }
 .alt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; }

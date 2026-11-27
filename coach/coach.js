@@ -302,7 +302,7 @@
       '',
       'ヒントの作り方:',
       '- wordHints（3段階それぞれ）: その段階の easyJa の中で、英語にするとき単語が思い浮かびにくそうな言葉を3〜6個選び、英語の候補を1〜3個ずつ挙げる。中学英語で言える簡単な候補を先に書く（例: 延期する → move, push back, postpone）',
-      '- skeleton（simple だけ）: simple の easyJa を1文ずつ、英語の語順で「部品」に分けた骨組み。部品の role は「誰が」「する」「何を」「誰に」「どこで」「いつ」「なぜ」「どのように」から選び、en は短い英語のかたまりにする（例: 誰が We → する decided → 何を to start a trial → いつ next month）。部品をつなげるとそのまま正しい英文になるようにし、簡単な単語を使う',
+      '- skeleton（simple だけ）: simple の easyJa を1文ずつ、英語の語順で「部品」に分けた骨組み。部品の role は「誰が」「する」「何を」「誰に」「どこで」「いつ」「なぜ」「どのように」から選び、en は短い英語のかたまりにする（例: 誰が We → する decided → 何を to start a trial → いつ next month）。部品をつなげるとそのまま正しい英文になるようにし、簡単な単語を使う。簡単でも、場面と相手に対して失礼・くだけすぎにならない言い方を選ぶ（例: 社外メールなら set up right ではなく set up correctly）。この骨組みどおりに書いた英文は添削で正解として扱うので、そのまま送っても問題ない英文にする',
       '',
       contextLines(scene, audience),
       '',
@@ -323,6 +323,8 @@
       '',
       '元の日本語: ' + ctx.src,
       '学習者が見た日本語（「' + levelOf(ctx.level).name + '」版の言い換え）: ' + ctx.easyJa,
+      ctx.skeletonText ? '学習者に見せた骨組みヒント（英語の語順と単語のヒント）: ' + ctx.skeletonText : null,
+      ctx.skeletonText ? '骨組みヒントどおりの表現は正しい答えとして扱い、kind: error では直さず、減点もしない。もっと良い言い方があれば kind: better で紹介する' : null,
       '評価は、学習者が見た版の内容を英語で表せているかで行う。simple 版なら簡単な表現を使っていること自体は減点しない。best もその版の内容に合わせる',
       ctx.level === 'simple'
         ? 'simple 版なので、corrected と best は中学1〜2年で習う基本の単語だけで書く（acquisition や implement のような難しい単語は使わない）。広告の仕事でそのまま使う言葉など、どうしても必要な単語を corrected・best・natural で使ったときは、glossary に英単語 en・日本語の意味 ja・言い換えずに使う理由 why を書く'
@@ -338,16 +340,19 @@
       '',
       '添削のしかた:',
       '- corrected: 学習者の英文をできるだけ活かし、必要な所だけ直した版。直す所がなければ学習者の英文そのまま',
-      '- changes: 直した箇所ごとに、元の表現 from・直した表現 to・理由 reason。reason には「なぜダメだったか」（文法の誤り / 語法・コロケーション / 不自然 / 意味のずれ・抜け / 丁寧さ）を必ず含める。直していない部分は書かない',
+      '- changes: 指摘する箇所ごとに、元の表現 from・直した表現 to・種類 kind・理由 reason。直していない部分は書かない',
+      '- kind は2種類: error は直すべき誤り（文法の誤り / 語法の誤り / 意味のずれ・抜け / 相手に失礼になる表現）。better は誤りではないが、もっと良くなる言い換え（より自然・より丁寧・より簡潔）。迷ったら better にする',
+      '- reason には、error なら「なぜダメか」、better なら「どう良くなるか」を必ず書く',
+      '- corrected には error の修正だけを反映する（better は反映しない）',
       '- 元の日本語の意味が英文から抜けている・ずれている場合は、必ず changes で指摘する',
       '- good: 良かった点を1〜2個',
       '- natural: ネイティブがこの場面で使う、より自然な言い方を2〜3個。それぞれのニュアンスや使い分けを日本語で',
       '- tone: 場面と相手に対して丁寧さが適切か。label は「適切」「丁寧すぎる」「くだけすぎ」「失礼になりうる」のどれか',
-      '- score: 100点満点。breakdown は accuracy（意味と文法の正確さ 0〜40）、naturalness（自然さ 0〜30）、tone（丁寧さ・トーン 0〜30）で、合計が score',
+      '- score: 100点満点。breakdown は accuracy（意味と文法の正確さ 0〜40）、naturalness（自然さ 0〜30）、tone（丁寧さ・トーン 0〜30）で、合計が score。減点するのは error だけで、better では減点しない',
       '- best: 復習用のお手本を1つ（アメリカ英語で、この場面で一番おすすめの言い方）',
       '',
       '次の形の JSON だけを返してください:',
-      '{"score": 0, "breakdown": {"accuracy": 0, "naturalness": 0, "tone": 0}, "summary": "ひとことの講評", "corrected": "...", "changes": [{"from": "...", "to": "...", "reason": "..."}], "good": ["..."], "natural": [{"en": "...", "nuance": "..."}], "tone": {"label": "適切", "comment": "..."}, "best": "...", "glossary": []}',
+      '{"score": 0, "breakdown": {"accuracy": 0, "naturalness": 0, "tone": 0}, "summary": "ひとことの講評", "corrected": "...", "changes": [{"from": "...", "to": "...", "kind": "error", "reason": "..."}], "good": ["..."], "natural": [{"en": "...", "nuance": "..."}], "tone": {"label": "適切", "comment": "..."}, "best": "...", "glossary": []}',
     ].filter((l) => l !== null).join('\n');
   }
 
@@ -423,7 +428,7 @@
       breakdown,
       summary: str(r.summary),
       corrected,
-      changes: arr(r.changes).map((c) => ({ from: str(c && c.from), to: str(c && c.to), reason: str(c && c.reason) })).filter((c) => c.reason || c.to),
+      changes: arr(r.changes).map((c) => ({ from: str(c && c.from), to: str(c && c.to), kind: str(c && c.kind) === 'better' ? 'better' : 'error', reason: str(c && c.reason) })).filter((c) => c.reason || c.to),
       good: arr(r.good).map(str).filter(Boolean),
       natural: arr(r.natural).map((n) => ({ en: str(n && n.en), nuance: str(n && n.nuance) })).filter((n) => n.en),
       tone: { label: str(r.tone && r.tone.label) || '—', comment: str(r.tone && r.tone.comment) },
@@ -490,12 +495,13 @@
     sc.append(enBox(ev.corrected, { marks: d && d.answerMarks, glossary: ev.glossary }));
     root.append(sc);
 
-    // 理由
-    if (ev.changes.length) {
-      const s = section('直したところと理由（' + ev.changes.length + '）');
+    // 理由：「直すところ」（誤り。点数に影響）と「もっと良くなるところ」（誤りではない。点数に影響しない）に分ける
+    const errors = ev.changes.filter((c) => c.kind !== 'better');
+    const betters = ev.changes.filter((c) => c.kind === 'better');
+    const changeList = (items, cls) => {
       const list = el('div', 'chg-list');
-      for (const c of ev.changes) {
-        const item = el('div', 'chg');
+      for (const c of items) {
+        const item = el('div', 'chg ' + cls);
         const line = el('div', 'chg-line');
         if (c.from) line.append(el('span', 'from', c.from));
         if (c.from && c.to) line.append(el('span', 'arrow', '→'));
@@ -504,8 +510,16 @@
         if (c.reason) item.append(el('p', 'why', c.reason));
         list.append(item);
       }
-      s.append(list);
-      root.append(s);
+      return list;
+    };
+    const se = section(errors.length ? '直すところ（' + errors.length + '）' : '直すところ');
+    if (errors.length) se.append(changeList(errors, 'is-error'));
+    else se.append(el('p', 'muted small', '直す必要がある誤りはありません。'));
+    root.append(se);
+    if (betters.length) {
+      const sbt = section('もっと良くなるところ（' + betters.length + '）・点数には影響しません');
+      sbt.append(changeList(betters, 'is-better'));
+      root.append(sbt);
     }
 
     // 自然な言い方
@@ -544,10 +558,19 @@
   }
 
   // ---- 保存 ----
+  // 骨組みの部品をつないだ英文（1文ずつ）
+  function skeletonSentences(sk) {
+    return arr(sk).map((x) => arr(x.parts).map((p) => p.en).join(' ').trim()).filter(Boolean)
+      .map((t) => t.charAt(0).toUpperCase() + t.slice(1) + (/[.?!]$/.test(t) ? '' : '.'));
+  }
+  const entrySkeleton = (e) => (e && e.level === 'simple' && e.levels && e.levels.simple ? arr(e.levels.simple.skeleton) : []);
+
   function answersFor(e) {
     const list = [e.best, e.corrected];
     for (const n of arr(e.natural)) list.push(n.en);
     for (const a of arr(e.attempts)) if (a.score >= 90) list.push(a.en);
+    const skText = skeletonSentences(entrySkeleton(e)).join(' ');
+    if (skText) list.push(skText);
     return [...new Set(list.map(str).filter((s) => s.trim()))];
   }
 
@@ -797,7 +820,8 @@
     const box = $('eval-status');
     const cur = curEasy();
     const level = curLevelId();
-    const ctx = { src: draft.src, easyJa: $('easy').value.trim() || cur.easyJa, level, scene: draft.scene, audience: draft.audience,
+    const skeletonText = level === 'simple' ? skeletonSentences(cur.skeleton).join(' ') : '';
+    const ctx = { src: draft.src, easyJa: $('easy').value.trim() || cur.easyJa, level, skeletonText, scene: draft.scene, audience: draft.audience,
       sceneGuess: draft.easy.sceneGuess, tone: draft.easy.tone };
     let ev;
     try {
@@ -964,7 +988,7 @@
     const box = $('rv-status');
     let ev;
     try {
-      ev = normEval(await ask(evalPrompt({ src: e.src, easyJa: e.easyJa, level: e.level || 'standard', scene: e.scene, audience: e.audience, sceneGuess: e.sceneGuess, tone: e.tone }, c.text),
+      ev = normEval(await ask(evalPrompt({ src: e.src, easyJa: e.easyJa, level: e.level || 'standard', skeletonText: skeletonSentences(entrySkeleton(e)).join(' '), scene: e.scene, audience: e.audience, sceneGuess: e.sceneGuess, tone: e.tone }, c.text),
         box, '添削しています', $('rv-ask')), c.text);
     } catch (err) {
       showError(box, err);
